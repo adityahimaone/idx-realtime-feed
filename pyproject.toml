@@ -1,0 +1,20 @@
+[project]
+name = "idx-realtime-feed"
+version = "0.1.0"
+description = "Near-realtime IDX price & orderbook feed for watchlist, syncing to Market Alpha Dashboard"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+    "loguru>=0.7",
+    "gspread>=6.1",
+    "google-auth>=2.30",
+    "playwright>=1.45",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]

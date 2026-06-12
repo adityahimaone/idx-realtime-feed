@@ -1,0 +1,103 @@
+# idx-realtime-feed
+
+Near-realtime price & orderbook feed untuk IDX watchlist (10-20 ticker),
+sync ke sheet `Realtime_Watchlist` di Market Alpha Dashboard.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    main.py (asyncio)                     │
+│                         │                               │
+│              ┌──────────┴──────────┐                    │
+│              │   sync_service.py   │ ← orchestrator     │
+│              └──────────┬──────────┘                    │
+│         ┌───────────────┼───────────────┐               │
+│         ▼               ▼               ▼               │
+│   ┌───────────┐  ┌────────────┐  ┌───────────┐         │
+│   │ Stockbit  │  │    RTI     │  │  Obscura  │         │
+│   │ Provider  │  │  Provider  │  │  Client   │         │
+│   │  (httpx)  │  │(playwright)│  │   (CDP)   │         │
+│   └─────┬─────┘  └─────┬──────┘  └─────┬─────┘         │
+│         │               │               │               │
+│         ▼               ▼               │               │
+│   exodus API       RTI Business ◄───────┘               │
+│                                                         │
+│              ┌──────────┴──────────┐                    │
+│              │    auth_service     │                     │
+│              │  (Obscura login +   │                     │
+│              │   token caching)    │                     │
+│              └─────────────────────┘                    │
+│                                                         │
+│              ┌──────────────────────────┐               │
+│              │     Repositories          │               │
+│              │  ┌────────────────────┐  │               │
+│              │  │ sheets_repository  │──┼─► Google Sheets│
+│              │  │ (integrity guard)  │  │               │
+│              │  └────────────────────┘  │               │
+│              │  ┌────────────────────┐  │               │
+│              │  │ sqlite_repository  │──┼─► Local DB    │
+│              │  └────────────────────┘  │               │
+│              └──────────────────────────┘               │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Features
+
+- **Manifest-driven**: sheet config (columns, name) disimpan di `manifest/feature_manifest.json`
+- **Integrity guard**: validate header structure sebelum write, anti-rollback timestamp check
+- **Dual auth**: Google service account (primary) + OAuth user token fallback
+- **Anti-burst**: jitter antar-request (1-4s), watchlist max 20 ticker
+- **Dual provider**: Stockbit exodus API (primary) → RTI Business via Obscura (fallback)
+- **Local history**: SQLite audit trail untuk backtest
+- **Audit log**: semua integrity events di-log ke `data/integrity_log.json`
+
+## Setup
+
+```bash
+# 1. Install deps
+uv sync
+
+# 2. Start Obscura CDP server (separate process / PM2)
+obscura serve --port 9222 --stealth
+
+# 3. Configure
+cp .env.example .env
+# Fill: STOCKBIT_USERNAME, STOCKBIT_PASSWORD, MARKET_ALPHA_SPREADSHEET_ID
+
+# 4. Run
+uv run python main.py
+```
+
+## Deploy (PM2)
+
+```bash
+pm2 start main.py --interpreter python3 --name idx-realtime-feed \
+    --cwd /path/to/idx-realtime-feed
+
+# Obscura as separate service
+pm2 start "obscura serve --port 9222 --stealth" --name obscura-cdp
+```
+
+## Structure
+
+```
+core/           config + logger
+manifest/       feature_manifest.json (sheet schema definition)
+providers/      data source adapters (stockbit, rti, obscura)
+schemas/        pydantic models (OrderbookSnapshot, PriceLevel)
+repositories/   persistence + integrity guard (Google Sheets, SQLite)
+services/       orchestration (auth, sync loop)
+data/           runtime data (sqlite db, integrity logs)
+main.py         entrypoint
+```
+
+## Integrity System
+
+Ported from Market Alpha Scout anti-rollback pattern:
+
+1. **`ensure_integrity(ws)`** — validate header row matches `feature_manifest.json`
+2. **`check_anti_rollback(ws)`** — detect if sheet timestamp is in the future (manual edit / concurrent writer)
+3. **`log_integrity_event()`** — append audit trail to `data/integrity_log.json`
+
+All checks run automatically before every `write_snapshots()` call.

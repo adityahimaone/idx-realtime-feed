@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "name": "idx-realtime-feed",
+  "spreadsheet": {
+    "sheet_name": "Realtime_Watchlist",
+    "columns": [
+      "Ticker",
+      "Last Price",
+      "Change %",
+      "Total Bid Lot",
+      "Total Ask Lot",
+      "Imbalance Ratio",
+      "Support",
+      "Resistance",
+      "Source",
+      "Last Update (UTC)"
+    ]
+  },
+  "sync_interval_seconds": 45,
+  "max_watchlist_size": 20
+}
