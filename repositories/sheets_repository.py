@@ -136,16 +136,27 @@ class SheetsRepository:
             return ws
 
     def get_watchlist(self) -> list[str]:
-        """Read tickers from Alpha_Watchlist sheet (col A, skip header)."""
+        """Read tickers from All Tickers sheet (col B, skip header).
+        
+        Tickers come as 'IDX:TICKER' format — strips prefix.
+        """
         try:
             sh = self._get_client().open_by_key(config.MARKET_ALPHA_SPREADSHEET_ID)
             ws = sh.worksheet(config.WATCHLIST_SHEET_NAME)
-            values = ws.col_values(1)[1:]  # skip header
-            tickers = [v.strip().upper() for v in values if v.strip()]
-            return tickers[: config.MAX_WATCHLIST_SIZE]
+            values = ws.col_values(2)[1:]  # col B, skip header
+            tickers = []
+            for v in values:
+                v = v.strip().upper()
+                if v:
+                    # Strip IDX: prefix if present
+                    if v.startswith("IDX:"):
+                        v = v[4:]
+                    tickers.append(v)
+            result = tickers[: config.MAX_WATCHLIST_SIZE]
+            logger.info(f"sheets: watchlist: {len(result)} tickers from '{config.WATCHLIST_SHEET_NAME}'")
+            return result
         except Exception as exc:
             logger.error(f"sheets: cannot read watchlist: {exc}")
-            # Try default tickers as fallback
             return config.DEFAULT_WATCHLIST or []
 
     def write_snapshots(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
@@ -319,7 +330,7 @@ class SheetsRepository:
 
         # -- 3. Market Recap sheet (separate, scales with any watchlist size) --
         try:
-            rw = self._get_or_create_sheet("Market Recap", 4, sid)
+            rw = self._get_or_create_sheet("Market Recap [IRW]", 4, sid)
             recap = compute_market_recap(rows_data)
             rw.clear()
             if recap:
