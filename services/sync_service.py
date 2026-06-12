@@ -91,6 +91,10 @@ class SyncService:
                 sheets_repository.write_snapshots(snapshots)
             except Exception as exc:
                 logger.error(f"sheets: write failed: {exc}")
+            try:
+                sheets_repository.write_dashboard(snapshots)
+            except Exception as exc:
+                logger.error(f"dashboard: write failed: {exc}")
         else:
             logger.warning("sync: no snapshots fetched this cycle")
             if self._consecutive_failures >= 3:
