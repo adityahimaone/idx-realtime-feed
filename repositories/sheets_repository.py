@@ -117,9 +117,14 @@ class SheetsRepository:
             "Set GOOGLE_SERVICE_ACCOUNT env var or ensure ~/.hermes/google_token.json exists."
         )
 
-    def _get_realtime_worksheet(self) -> gspread.Worksheet:
-        """Get or create the Realtime_Watchlist worksheet."""
-        sh = self._get_client().open_by_key(config.MARKET_ALPHA_SPREADSHEET_ID)
+    def _get_realtime_worksheet(self, sheet_id: str | None = None) -> gspread.Worksheet:
+        """Get or create the Realtime_Watchlist worksheet.
+        
+        Args:
+            sheet_id: Override sheet ID. Uses config.MARKET_ALPHA_SPREADSHEET_ID if None.
+        """
+        target_id = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
+        sh = self._get_client().open_by_key(target_id)
         try:
             return sh.worksheet(config.REALTIME_SHEET_NAME)
         except gspread.WorksheetNotFound:
@@ -143,9 +148,13 @@ class SheetsRepository:
             # Try default tickers as fallback
             return config.DEFAULT_WATCHLIST or []
 
-    def write_snapshots(self, snapshots: list[OrderbookSnapshot]) -> None:
+    def write_snapshots(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
         """Overwrite Realtime_Watchlist with latest snapshots.
 
+        Args:
+            snapshots: List of orderbook data to write
+            sheet_id: Override sheet ID. Uses config.MARKET_ALPHA_SPREADSHEET_ID if None.
+            
         Integrity checks performed before write:
           - header validation against manifest
           - anti-rollback timestamp check
@@ -156,7 +165,7 @@ class SheetsRepository:
             log_integrity_event,
         )
 
-        ws = self._get_realtime_worksheet()
+        ws = self._get_realtime_worksheet(sheet_id)
 
         # ── Integrity check 1: header structure ──
         valid, issues = ensure_integrity(ws)
@@ -224,9 +233,10 @@ class SheetsRepository:
 
 
 
-    def _get_dashboard_worksheet(self) -> gspread.Worksheet:
+    def _get_dashboard_worksheet(self, sheet_id: str | None = None) -> gspread.Worksheet:
         """Get or create the Dashboard [Stockbit] worksheet."""
-        sh = self._get_client().open_by_key(config.MARKET_ALPHA_SPREADSHEET_ID)
+        target_id = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
+        sh = self._get_client().open_by_key(target_id)
         title = "Dashboard [Stockbit]"
         try:
             return sh.worksheet(title)
@@ -238,8 +248,8 @@ class SheetsRepository:
             ws.freeze(1)
             return ws
 
-    def write_dashboard(self, snapshots: list[OrderbookSnapshot]) -> None:
-        ws = self._get_dashboard_worksheet()
+    def write_dashboard(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
+        ws = self._get_dashboard_worksheet(sheet_id)
         rows = [DASHBOARD_HEADER]
         for i, snap in enumerate(snapshots):
             r = i + 2

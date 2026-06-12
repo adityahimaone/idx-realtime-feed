@@ -95,6 +95,15 @@ class SyncService:
                 sheets_repository.write_dashboard(snapshots)
             except Exception as exc:
                 logger.error(f"dashboard: write failed: {exc}")
+            # Also write to MAS staging sheet (dual-write)
+            if config.MAS_STAGING_SPREADSHEET_ID:
+                try:
+                    from repositories.sheets_repository import SheetsRepository
+                    staging_repo = SheetsRepository()
+                    staging_repo.write_snapshots(snapshots, sheet_id=config.MAS_STAGING_SPREADSHEET_ID)
+                    logger.info("staging: wrote %d snapshots", len(snapshots))
+                except Exception as exc:
+                    logger.error(f"staging: write failed: {exc}")
         else:
             logger.warning("sync: no snapshots fetched this cycle")
             if self._consecutive_failures >= 3:
