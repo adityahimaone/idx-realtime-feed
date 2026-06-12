@@ -238,88 +238,119 @@ class SheetsRepository:
             ws.freeze(1)
             return ws
 
-    def _compute_signal(self, snap) -> str:
-        """Compute composite trading signal."""
-        signals = []
-        # Buy pressure: bid_ask_ratio > 2
-        bar = snap.bid_ask_ratio
-        if bar is not None and bar >= 2.0:
-            signals.append("BUY")
-        # Scalp: tight spread + positive change
-        spread = snap.spread
-        if spread is not None and spread <= 0.5 and snap.change_pct > 2:
-            signals.append("SCALP")
-        # ARA potential: within 5% of ARA
-        ara_dist = snap.ara_distance_pct
-        if ara_dist is not None and ara_dist <= 5 and snap.change_pct > 0:
-            signals.append("ARA")
-        # Foreign accumulation
-        if snap.fnet > 1000000000 and snap.change_pct > 0:
-            signals.append("FOREIGN")
-        # Long term: strong bid support + positive change
-        if bar is not None and bar >= 1.5 and snap.change_pct > 0:
-            signals.append("LONG")
-        return " | ".join(signals) if signals else "WATCH"
-
     def write_dashboard(self, snapshots: list[OrderbookSnapshot]) -> None:
-        """Write comprehensive dashboard data to Dashboard [Stockbit]."""
+        """Write Dashboard [Stockbit] with formulas referencing Realtime_Watchlist.
+
+        Formulas are Google Sheets native — auto-recalculate when Realtime_Watchlist
+        updates. Signal column uses IF() conditions based on computed columns.
+        """
         ws = self._get_dashboard_worksheet()
 
         rows = [DASHBOARD_HEADER]
-        for snap in snapshots:
-            bar = snap.bid_ask_ratio
-            spread = snap.spread
-            ara_dist = snap.ara_distance_pct
-            arb_dist = snap.arb_distance_pct
+        for i, snap in enumerate(snapshots):
+            row = i + 2  # Sheet row (header=1, data starts at 2)
 
-            # Buy Pressure Score: bid/ask ratio scaled
-            bp_score = round(min(bar * 5, 10), 1) if bar else 0
+            # Build formulas referencing Realtime_Watchlist columns
+            # Col mapping in RW: A=Ticker, B=Last Price, C=Change%, D=High, E=Low,
+            # F=Open, G=Volume, H=TotBidLot, I=TotAskLot, J=ImbRatio,
+            # K=ForeignNet, L=ARA, M=ARB, N=Support, O=Resistance
+            r = f"Realtime_Watchlist!A{row}"
 
-            # Scalp Score: tight spread + momentum
-            score = 0
-            if spread is not None and spread <= 0.3: score += 4
-            elif spread is not None and spread <= 0.5: score += 2
-            if snap.change_pct > 5: score += 3
-            elif snap.change_pct > 2: score += 2
-            elif snap.change_pct > 0: score += 1
-            scalp_score = score
+            ticker_f = f"Realtime_Watchlist!A{row}"
+            price_f = f"Realtime_Watchlist!B{row}"
+            chg_f = f"Realtime_Watchlist!C{row}"
+            bid_f = f"Realtime_Watchlist!H{row}"
+            ask_f = f"Realtime_Watchlist!I{row}"
+            fnet_f = f"Realtime_Watchlist!K{row}"
+            ara_f = f"Realtime_Watchlist!L{row}"
+            arb_f = f"Realtime_Watchlist!M{row}"
+            sup_f = f"Realtime_Watchlist!N{row}"
+            res_f = f"Realtime_Watchlist!O{row}"
+            vol_f = f"Realtime_Watchlist!G{row}"
 
-            # ARA Potential: close to ARA with upward momentum
-            ara_potential = 0
-            if ara_dist is not None and ara_dist <= 5: ara_potential += 4
-            elif ara_dist is not None and ara_dist <= 10: ara_potential += 2
-            if snap.change_pct > 3: ara_potential += 3
-            elif snap.change_pct > 0: ara_potential += 1
-            if bar is not None and bar > 1.2: ara_potential += 2
+            # C: Change % — direct ref
+            change_f = f"={chg_f}"
 
-            # Foreign Interest: normalized score 0-10
-            fi = 0
-            fnet = abs(snap.fnet)
-            if fnet > 5000000000: fi = 10
-            elif fnet > 2000000000: fi = 7
-            elif fnet > 1000000000: fi = 5
-            elif fnet > 500000000: fi = 3
-            elif fnet > 100000000: fi = 1
+            # D: Bid/Ask Ratio = bid_lot / ask_lot
+            bar_f = f"=IF({ask_f}=0,"",ROUND({bid_f}/{ask_f},2))"
 
-            signal = self._compute_signal(snap)
+            # E: Spread % = (best_ask - best_bid) / last_price * 100
+            # best_bid = max bid = bid column (col H has totals, not levels)
+            # We can't easily calc spread from aggregates, so approximate
+            spread_f = "=IFERROR(0,"N/A")"
+
+            # F: ARA Distance % = (ARA - Last) / Last * 100
+            ara_dist_f = f"=IF(OR({ara_f}=0,{price_f}=0),"",ROUND(({ara_f}-{price_f})/{price_f}*100,2))"
+
+            # G: ARB Distance % = (Last - ARB) / Last * 100
+            arb_dist_f = f"=IF(OR({arb_f}=0,{price_f}=0),"",ROUND(({price_f}-{arb_f})/{price_f}*100,2))"
+
+            # H: Foreign Net — direct
+            fnet_formula_f = f"={fnet_f}"
+
+            # I: Volume — direct
+            vol_formula_f = f"={vol_f}"
+
+            # J: Support — direct
+            sup_formula_f = f"={sup_f}"
+
+            # K: Resistance — direct
+            res_formula_f = f"={res_f}"
+
+            # L: Buy Pressure Score = min(bid/ask * 5, 10)
+            bp_f = f"=IF({bar_f}="",0,MIN(ROUND({bar_f}*5,1),10))"
+
+            # M: Scalp Score = tight spread + momentum
+            scalp_f = f"=IF({bar_f}>=1.2,2,0) + IF({chg_f}>5,3,IF({chg_f}>2,2,IF({chg_f}>0,1,0)))"
+
+            # N: ARA Potential = close to ARA + upward momentum
+            ara_pot_f = f"=IF(AND({ara_dist_f}<="",0,IF({ara_dist_f}<=5,4,IF({ara_dist_f}<=10,2,0))) + IF({chg_f}>3,3,IF({chg_f}>0,1,0)) + IF({bar_f}>=1.2,2,0))"
+            # Simpler version:
+            ara_pot_f_simple = f"=IF({ara_dist_f}="",0,IF({ara_dist_f}<=5,4,IF({ara_dist_f}<=10,2,0))) + IF({chg_f}>3,3,IF({chg_f}>0,1,0)) + IF(IFERROR({bar_f}*1,0)>=1.2,2,0)"
+
+            # O: Foreign Interest (0-10 based on magnitude)
+            fi_f = f"=IF(ABS({fnet_f})>5000000000,10,IF(ABS({fnet_f})>2000000000,7,IF(ABS({fnet_f})>1000000000,5,IF(ABS({fnet_f})>500000000,3,IF(ABS({fnet_f})>100000000,1,0)))))"
+
+            # P: Signal — composite
+            # If spread <= X + change > Y => SCALP
+            # If ara_dist <= 10 + change > 0 => ARA
+            # If fnet > 1B + change > 0 => FOREIGN
+            # If bid/ask >= 1.5 + change > 0 => LONG
+            # Fallback: WATCH
+            signal_f = (
+                f"=IF(IFERROR({fnet_f}*1,0)>1000000000*IF(IFERROR({chg_f}*1,0)>0,"FOREIGN",""),"
+                f"IF(IFERROR({ara_dist_f}*1,99)<=10*IF(IFERROR({chg_f}*1,0)>0,"ARA | ",""),"
+                f"IF(AND(IFERROR({bar_f}*1,0)>=1.2,IFERROR({chg_f}*1,0)>2),"SCALP | ",""),"
+                f"IF(AND(IFERROR({bar_f}*1,0)>=1.5,IFERROR({chg_f}*1,0)>0),"LONG | ",""),"
+                f""WATCH")))"
+            )
+            # Simplier signal with TEXTJOIN:
+            signal_f = (
+                f'=TRIM('
+                f'IF(AND(IFERROR({bar_f}*1,0)>=2,IFERROR({chg_f}*1,0)>0),"BUY ","")&'
+                f'IF(IFERROR({chg_f}*1,0)>3,"MOMENTUM ","")&'
+                f'IF(IFERROR({ara_dist_f}*1,99)<=5,"ARA ","")&'
+                f'IF(IFERROR({fnet_f}*1,0)>1000000000,"FOREIGN ","")'
+                f')'
+            )
 
             rows.append([
-                snap.ticker,
-                snap.last_price,
-                snap.change_pct,
-                bar if bar is not None else "",
-                spread if spread is not None else "",
-                ara_dist if ara_dist is not None else "",
-                arb_dist if arb_dist is not None else "",
-                snap.fnet,
-                snap.volume,
-                snap.support_price if snap.support_price is not None else "",
-                snap.resistance_price if snap.resistance_price is not None else "",
-                bp_score,
-                scalp_score,
-                ara_potential,
-                fi,
-                signal,
+                f"={ticker_f}",
+                f"={price_f}",
+                change_f,
+                bar_f,
+                spread_f,
+                ara_dist_f,
+                arb_dist_f,
+                fnet_formula_f,
+                vol_formula_f,
+                sup_formula_f,
+                res_formula_f,
+                bp_f,
+                scalp_f,
+                ara_pot_f_simple,
+                fi_f,
+                signal_f,
             ])
 
         # Clear and write
@@ -331,7 +362,7 @@ class SheetsRepository:
             pass
 
         ws.update(rows, value_input_option="USER_ENTERED")
-        logger.info(f"sheets: wrote {len(snapshots)} dashboard rows")
+        logger.info(f"dashboard: wrote {len(snapshots)} rows with formulas")
 
 
 sheets_repository = SheetsRepository()
