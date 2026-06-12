@@ -10,14 +10,36 @@ from __future__ import annotations
 import sys
 
 from loguru import logger
+from rich.logging import RichHandler
+from rich.text import Text
 
 logger.remove()
 
+# RichHandler for beautiful terminal logging
 logger.add(
-    sys.stderr,
+    RichHandler(
+        rich_tracebacks=True,
+        markup=True,
+        show_path=False,
+        show_time=True,
+        show_level=True,
+    ),
+    format="{message}",
     level="INFO",
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
 )
+
+
+def file_formatter(record) -> str:
+    """Format loguru records for files, stripping Rich markup tags."""
+    raw_message = record["message"]
+    try:
+        plain_message = Text.from_markup(raw_message).plain
+    except Exception:
+        plain_message = raw_message
+
+    record["extra"]["plain_message"] = plain_message
+    return "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[plain_message]}\n{exception}"
+
 
 logger.add(
     "logs/idx_realtime_feed.log",
@@ -25,6 +47,7 @@ logger.add(
     retention="14 days",
     level="DEBUG",
     enqueue=True,
+    format=file_formatter,
 )
 
 __all__ = ["logger"]
