@@ -8,11 +8,15 @@
       "Ticker",
       "Last Price",
       "Change %",
+      "High",
+      "Low",
+      "Open",
+      "Volume",
       "Total Bid Lot",
       "Total Ask Lot",
       "Imbalance Ratio",
-      "Support (Max Bid Lot)",
-      "Resistance (Max Ask Lot)",
+      "Support",
+      "Resistance",
       "Source",
       "Last Update (UTC)"
     ]

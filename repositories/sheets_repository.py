@@ -32,6 +32,10 @@ HEADER_ROW = [
     "Ticker",
     "Last Price",
     "Change %",
+    "High",
+    "Low",
+    "Open",
+    "Volume",
     "Total Bid Lot",
     "Total Ask Lot",
     "Imbalance Ratio",
@@ -162,6 +166,10 @@ class SheetsRepository:
                     snap.ticker,
                     snap.last_price,
                     snap.change_pct,
+                    snap.high if snap.high else "",
+                    snap.low if snap.low else "",
+                    snap.open_price if snap.open_price else "",
+                    snap.volume if snap.volume else "",
                     snap.total_bid_lot,
                     snap.total_ask_lot,
                     snap.imbalance_ratio if snap.imbalance_ratio is not None else "",
@@ -178,7 +186,7 @@ class SheetsRepository:
             existing_rows = len(ws.get_all_values())
             if existing_rows > 1:
                 # Clear all data rows (leaving header at row 1)
-                range_clear = f"A2:J{existing_rows}"
+                range_clear = f"A2:N{existing_rows}"
                 ws.batch_clear([range_clear])
         except Exception as exc:
             logger.warning(f"sheets: clear failed (continuing): {exc}")

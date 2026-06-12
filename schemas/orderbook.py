@@ -38,6 +38,11 @@ class OrderbookSnapshot(BaseModel):
 
     last_price: float
     prev_close: float
+    high: float = 0.0
+    low: float = 0.0
+    open_price: float = 0.0
+    change: int = 0
+    volume: float = 0.0
 
     bid_levels: list[PriceLevel] = Field(default_factory=list)
     ask_levels: list[PriceLevel] = Field(default_factory=list)

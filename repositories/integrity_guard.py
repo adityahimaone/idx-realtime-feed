@@ -75,7 +75,7 @@ def ensure_integrity(ws) -> tuple[bool, list[str]]:
 def check_anti_rollback(ws) -> tuple[bool, str | None]:
     """Anti-rollback check: ensure we're not overwriting newer data.
 
-    Reads the 'Last Update (UTC)' column (col 10) from row 2.
+    Reads the 'Last Update (UTC)' column (col 14) from row 2.
     If existing timestamp is MORE RECENT than now minus sync_interval * 2,
     it means another process already wrote — safe to proceed.
     If existing timestamp is IN THE FUTURE relative to now, something is
@@ -87,12 +87,21 @@ def check_anti_rollback(ws) -> tuple[bool, str | None]:
     manifest = load_manifest()
     sync_interval = manifest.get("sync_interval_seconds", 45)
 
+    # Find "Last Update (UTC)" column index from headers
     try:
-        # Col 10 = Last Update (UTC), row 2 = first data row
-        last_update_str = ws.cell(2, 10).value
+        headers = ws.row_values(1)
+        update_col = None
+        for i, h in enumerate(headers):
+            if "last update" in h.lower():
+                update_col = i + 1  # 1-indexed
+                break
+        if update_col is None:
+            logger.warning("anti-rollback: 'Last Update' column not found")
+            return True, None
+        
+        last_update_str = ws.cell(2, update_col).value
     except Exception as exc:
-        logger.warning(f"anti-rollback: cannot read last update: {exc}")
-        # Can't verify — allow write but warn
+        logger.warning(f"anti-rollback: cannot read headers or value: {exc}")
         return True, None
 
     if not last_update_str:

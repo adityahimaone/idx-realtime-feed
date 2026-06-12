@@ -52,31 +52,39 @@ sync ke sheet `Realtime_Watchlist` di Market Alpha Dashboard.
 - **Local history**: SQLite audit trail untuk backtest
 - **Audit log**: semua integrity events di-log ke `data/integrity_log.json`
 
-## Setup
+## Setup & Run
 
+### 1. Install & Setup
 ```bash
-# 1. Install deps
+# Clone & Setup
+git clone <repo-url>
+cd idx-realtime-feed
 uv sync
+uv run playwright install chromium
 
-# 2. Start Obscura CDP server (separate process / PM2)
-obscura serve --port 9222 --stealth
-
-# 3. Configure
+# Copy & Edit .env
 cp .env.example .env
-# Fill: STOCKBIT_USERNAME, STOCKBIT_PASSWORD, MARKET_ALPHA_SPREADSHEET_ID
+# Isi STOCKBIT_USERNAME, STOCKBIT_PASSWORD, MARKET_ALPHA_SPREADSHEET_ID
+```
 
-# 4. Run
+### 2. Get/Refresh Token (BYOB Method)
+Jika token kadaluarsa, gunakan browser Brave (atau Chrome) untuk mendapatkan token baru:
+1. Pastikan Anda sudah login ke Stockbit di browser.
+2. Gunakan skill `idx-realtime-feed-token-refresh` atau secara manual:
+   - Buka `https://stockbit.com/watchlist`
+   - Buka DevTools > Network, filter `exodus`
+   - Salin header `Authorization: Bearer <token>` dari salah satu request.
+   - Update `STOCKBIT_BEARER_TOKEN` di `.env`.
+
+### 3. Run
+```bash
 uv run python main.py
 ```
 
-## Deploy (PM2)
-
+### 4. Deploy (PM2)
 ```bash
 pm2 start main.py --interpreter python3 --name idx-realtime-feed \
     --cwd /path/to/idx-realtime-feed
-
-# Obscura as separate service
-pm2 start "obscura serve --port 9222 --stealth" --name obscura-cdp
 ```
 
 ## Structure

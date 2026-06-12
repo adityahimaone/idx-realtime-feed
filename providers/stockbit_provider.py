@@ -29,7 +29,7 @@ import httpx
 from core.logger import logger
 from schemas.orderbook import DataSource, OrderbookSnapshot, PriceLevel
 
-BASE_URL = "https://exodus.stockbit.com/stream/v3/symbol"
+BASE_URL = "https://exodus.stockbit.com/company-price-feed/v2/orderbook/companies"
 
 
 class StockbitProvider:
@@ -47,8 +47,8 @@ class StockbitProvider:
     async def fetch_orderbook(self, ticker: str) -> OrderbookSnapshot | None:
         """Fetch snapshot orderbook untuk satu ticker.
 
-        Return None kalau request gagal (caller harus fallback ke
-        RTI provider / trigger re-auth kalau 401).
+        Endpoint: /company-price-feed/v2/orderbook/companies/{TICKER}
+        Return None kalau request gagal.
         """
         try:
             resp = await self._client.get(f"/{ticker.upper()}")
@@ -67,35 +67,65 @@ class StockbitProvider:
 
     @staticmethod
     def _parse_response(ticker: str, data: dict) -> OrderbookSnapshot:
-        """PLACEHOLDER parser — sesuaikan key sesuai struktur asli exodus API.
+        """Parse exodus orderbook v2 response.
 
-        Asumsi sementara struktur (TODO Phase 0, verify):
+        Response actual:
         {
           "data": {
-            "lastprice": 8550,
-            "prevclose": 8400,
-            "bid": [{"price": 8550, "lot": 1200, "freq": 34}, ...],
-            "ask": [{"price": 8575, "lot": 800, "freq": 21}, ...]
+            "lastprice": 6075,
+            "previous": 5825,
+            "open": 6000,
+            "high": 6100,
+            "low": 5900,
+            "change": 250,
+            "volume": 235263900,
+            "bid": [{"price": "6075", "que_num": "165", "volume": "2264100"}, ...],
+            "offer": [{"price": "...", "que_num": "...", "volume": "..."}, ...]
           }
         }
+
+        Note: volume = shares (÷100 = lot), key ask adalah "offer" bukan "ask".
         """
         payload = data.get("data", {})
 
+        def _to_lot(vol_str: str) -> int:
+            """Convert volume string (shares) to lot (100 shares = 1 lot)."""
+            try:
+                return int(vol_str) // 100
+            except (ValueError, TypeError):
+                return 0
+
         bid_levels = [
-            PriceLevel(price=lvl["price"], lot=lvl["lot"], freq=lvl.get("freq", 0))
+            PriceLevel(
+                price=float(lvl["price"]),
+                lot=_to_lot(lvl.get("volume", "0")),
+                freq=int(lvl.get("que_num", 0)),
+            )
             for lvl in payload.get("bid", [])
+            if lvl.get("price")
         ]
+        # "offer" = ask side
         ask_levels = [
-            PriceLevel(price=lvl["price"], lot=lvl["lot"], freq=lvl.get("freq", 0))
-            for lvl in payload.get("ask", [])
+            PriceLevel(
+                price=float(lvl["price"]),
+                lot=_to_lot(lvl.get("volume", "0")),
+                freq=int(lvl.get("que_num", 0)),
+            )
+            for lvl in payload.get("offer", [])
+            if lvl.get("price")
         ]
 
         return OrderbookSnapshot(
             ticker=ticker.upper(),
             timestamp=datetime.now(timezone.utc),
             source=DataSource.STOCKBIT,
-            last_price=payload.get("lastprice", 0.0),
-            prev_close=payload.get("prevclose", 0.0),
+            last_price=float(payload.get("lastprice", 0)),
+            prev_close=float(payload.get("previous", 0)),
+            high=float(payload.get("high", 0)),
+            low=float(payload.get("low", 0)),
+            open_price=float(payload.get("open", 0)),
+            change=int(payload.get("change", 0)),
+            volume=float(payload.get("volume", 0)),
             bid_levels=bid_levels,
             ask_levels=ask_levels,
         )
