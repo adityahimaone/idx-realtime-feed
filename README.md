@@ -52,6 +52,7 @@ Token from env `STOCKBIT_BEARER_TOKEN` or auto-refresh via Obscura.
 - **Dual provider**: Stockbit exodus API (primary) → RTI Business via Obscura (fallback)
 - **Local history**: SQLite audit trail untuk backtest
 - **Audit log**: semua integrity events di-log ke `data/integrity_log.json`
+- **Orderbook Analysis CLI**: Standalone tool `ticker.py` untuk analisa 3-Tier (Aggressive, Moderat, Low Risk) dengan support delta snapshot checking & wall detection.
 
 ## Setup & Run
 
@@ -87,8 +88,24 @@ Buka `https://stockbit.com/watchlist` → DevTools > Network > filter `exodus` �
 Copy `Authorization: Bearer <token>` → paste ke `.env` sebagai `STOCKBIT_BEARER_TOKEN`.
 
 ### 3. Run
+
+**Perpetual Sync Feed:**
 ```bash
 uv run python main.py
+```
+
+**Orderbook Analysis CLI (Single Run):**
+```bash
+uv run python ticker.py <TICKER>
+# Contoh: uv run python ticker.py BBCA
+# Jika ticker tidak dimasukkan, script akan meminta input secara interaktif.
+```
+
+**Orderbook Analysis CLI (Streaming / Live):**
+```bash
+uv run python ticker_stream.py <TICKER>
+# Contoh: uv run python ticker_stream.py BBCA
+# Script ini akan terus meng-update data setiap 5 detik secara realtime.
 ```
 
 ### 4. Deploy (PM2)
