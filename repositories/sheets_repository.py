@@ -154,7 +154,7 @@ class SheetsRepository:
             resp.raise_for_status()
             data = resp.json()
             tickers = [item["symbol"] for item in data["data"]["result"]]
-            result = tickers[: config.MAX_WATCHLIST_SIZE]
+            result = tickers if config.MAX_WATCHLIST_SIZE <= 0 else tickers[: config.MAX_WATCHLIST_SIZE]
             logger.info(
                 f"sheets: watchlist: {len(result)} tickers from Stockbit API"
             )
