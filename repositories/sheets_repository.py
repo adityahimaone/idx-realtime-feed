@@ -262,22 +262,25 @@ class SheetsRepository:
     def _build_formula_rows(self, snapshots: list[OrderbookSnapshot]) -> list[list]:
         """Build formula-referenced rows for Dashboard Formula [IRW].
 
-        Each formula references =Realtime_Watchlist!col{row} so values are live.
+        Each formula references ='Realtime_Watchlist [IRW]'!col{row} so values are live.
+        Sheet name wrapped in single quotes because of the space + brackets.
+        Uses config.REALTIME_SHEET_NAME so rename in .env propagates automatically.
         """
+        rw_ref = f"'{config.REALTIME_SHEET_NAME}'"
         rows = [DASHBOARD_HEADER]
         for i in range(len(snapshots)):
-            r = i + 2  # row 2 onwards in Realtime_Watchlist
-            pw = f"Realtime_Watchlist!A{r}"
-            pp = f"Realtime_Watchlist!B{r}"
-            pc = f"Realtime_Watchlist!C{r}"
-            pb = f"Realtime_Watchlist!H{r}"
-            pa = f"Realtime_Watchlist!I{r}"
-            pf = f"Realtime_Watchlist!K{r}"
-            pla = f"Realtime_Watchlist!L{r}"
-            plb = f"Realtime_Watchlist!M{r}"
-            pv = f"Realtime_Watchlist!G{r}"
-            ps = f"Realtime_Watchlist!N{r}"
-            pr = f"Realtime_Watchlist!O{r}"
+            r = i + 2  # row 2 onwards in Realtime_Watchlist [IRW]
+            pw = f"{rw_ref}!A{r}"
+            pp = f"{rw_ref}!B{r}"
+            pc = f"{rw_ref}!C{r}"
+            pb = f"{rw_ref}!H{r}"
+            pa = f"{rw_ref}!I{r}"
+            pf = f"{rw_ref}!K{r}"
+            pla = f"{rw_ref}!L{r}"
+            plb = f"{rw_ref}!M{r}"
+            pv = f"{rw_ref}!G{r}"
+            ps = f"{rw_ref}!N{r}"
+            pr = f"{rw_ref}!O{r}"
 
             ref_bar = f'IF({pa}=0,"",ROUND({pb}/{pa},2))'
             ref_ara_d = f'IF(OR({pla}=0,{pp}=0),"",ROUND(({pla}-{pp})/{pp}*100,2))'
