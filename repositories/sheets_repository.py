@@ -238,43 +238,45 @@ class SheetsRepository:
             ws.freeze(1)
             return ws
 
-    def write_dashboard(self, snapshots):
+    def write_dashboard(self, snapshots: list[OrderbookSnapshot]) -> None:
         ws = self._get_dashboard_worksheet()
         rows = [DASHBOARD_HEADER]
         for i, snap in enumerate(snapshots):
             r = i + 2
-            pp = 'Realtime_Watchlist!B' + str(r)
-            pc = 'Realtime_Watchlist!C' + str(r)
-            pb = 'Realtime_Watchlist!H' + str(r)
-            pa = 'Realtime_Watchlist!I' + str(r)
-            pf = 'Realtime_Watchlist!K' + str(r)
-            pla = 'Realtime_Watchlist!L' + str(r)
-            plb = 'Realtime_Watchlist!M' + str(r)
-            pv = 'Realtime_Watchlist!G' + str(r)
-            ps = 'Realtime_Watchlist!N' + str(r)
-            pr = 'Realtime_Watchlist!O' + str(r)
-            pw = 'Realtime_Watchlist!A' + str(r)
+            pp = "Realtime_Watchlist!B" + str(r)
+            pc = "Realtime_Watchlist!C" + str(r)
+            pb = "Realtime_Watchlist!H" + str(r)
+            pa = "Realtime_Watchlist!I" + str(r)
+            pf = "Realtime_Watchlist!K" + str(r)
+            pla = "Realtime_Watchlist!L" + str(r)
+            plb = "Realtime_Watchlist!M" + str(r)
+            pv = "Realtime_Watchlist!G" + str(r)
+            ps = "Realtime_Watchlist!N" + str(r)
+            pr = "Realtime_Watchlist!O" + str(r)
+            pw = "Realtime_Watchlist!A" + str(r)
 
-            f_price = '=' + pp
-            f_change = '=' + pc
-            f_bar = '=IF(' + pa + '=0,"",ROUND(' + pb + '/' + pa + ',2))'
-            f_spread = '=IFERROR(0,"N/A")'
-            f_ara_d = '=IF(OR(' + pla + '=0,' + pp + '=0),"",ROUND((' + pla + '-' + pp + ')/' + pp + '*100,2))'
-            f_arb_d = '=IF(OR(' + plb + '=0,' + pp + '=0),"",ROUND((' + pp + '-' + plb + ')/' + pp + '*100,2))'
-            f_fnet = '=' + pf
-            f_vol = '=' + pv
-            f_sup = '=' + ps
-            f_res = '=' + pr
-            f_bp = '=IF(' + f_bar + '="",0,MIN(ROUND(' + f_bar + '*5,1),10))'
-            f_scalp = '=IF(IFERROR(' + f_bar + '*1,0)>=1.2,2,0)+IF(' + pc + '>5,3,IF(' + pc + '>2,2,IF(' + pc + '>0,1,0)))'
-            f_ara_p = '=IF(IFERROR(' + f_ara_d + '*1,99)<=5,4,IF(IFERROR(' + f_ara_d + '*1,99)<=10,2,0))+IF(' + pc + '>3,3,IF(' + pc + '>0,1,0))+IF(IFERROR(' + f_bar + '*1,0)>=1.2,2,0)'
-            f_fi = '=IF(ABS(' + pf + ')>5000000000,10,IF(ABS(' + pf + ')>2000000000,7,IF(ABS(' + pf + ')>1000000000,5,IF(ABS(' + pf + ')>500000000,3,IF(ABS(' + pf + ')>100000000,1,0)))))'
-            f_sig = '=TRIM(IF(AND(IFERROR(' + f_bar + '*1,0)>=2,IFERROR(' + pc + '*1,0)>0),"BUY ","")&IF(IFERROR(' + pc + '*1,0)>3,"MOMENTUM ","")&IF(IFERROR(' + f_ara_d + '*1,99)<=5,"ARA ","")&IF(IFERROR(' + pf + '*1,0)>1000000000,"FOREIGN ",""))'
+            # References (no =)
+            ref_bar = 'IF(' + pa + '=0,"",ROUND(' + pb + '/' + pa + ',2))'
+            ref_ara_d = 'IF(OR(' + pla + '=0,' + pp + '=0),"",ROUND((' + pla + '-' + pp + ')/' + pp + '*100,2))'
+            ref_arb_d = 'IF(OR(' + plb + '=0,' + pp + '=0),"",ROUND((' + pp + '-' + plb + ')/' + pp + '*100,2))'
 
             rows.append([
-                '=' + pw, f_price, f_change, f_bar, f_spread,
-                f_ara_d, f_arb_d, f_fnet, f_vol, f_sup, f_res,
-                f_bp, f_scalp, f_ara_p, f_fi, f_sig,
+                '=' + pw,
+                '=' + pp,
+                '=' + pc,
+                '=' + ref_bar,
+                '=IFERROR(0,"N/A")',
+                '=' + ref_ara_d,
+                '=' + ref_arb_d,
+                '=' + pf,
+                '=' + pv,
+                '=' + ps,
+                '=' + pr,
+                '=IF(' + ref_bar + '="",0,MIN(ROUND(' + ref_bar + '*5,1),10))',
+                '=IF(IFERROR(' + ref_bar + '*1,0)>=1.2,2,0)+IF(' + pc + '>5,3,IF(' + pc + '>2,2,IF(' + pc + '>0,1,0)))',
+                '=IF(IFERROR(' + ref_ara_d + '*1,99)<=5,4,IF(IFERROR(' + ref_ara_d + '*1,99)<=10,2,0))+IF(' + pc + '>3,3,IF(' + pc + '>0,1,0))+IF(IFERROR(' + ref_bar + '*1,0)>=1.2,2,0)',
+                '=IF(ABS(' + pf + ')>5000000000,10,IF(ABS(' + pf + ')>2000000000,7,IF(ABS(' + pf + ')>1000000000,5,IF(ABS(' + pf + ')>500000000,3,IF(ABS(' + pf + ')>100000000,1,0)))))',
+                '=TRIM(IF(AND(IFERROR(' + ref_bar + '*1,0)>=2,IFERROR(' + pc + '*1,0)>0),"BUY ","")&IF(IFERROR(' + pc + '*1,0)>3,"MOMENTUM ","")&IF(IFERROR(' + ref_ara_d + '*1,99)<=5,"ARA ","")&IF(IFERROR(' + pf + '*1,0)>1000000000,"FOREIGN ",""))',
             ])
 
         try:
@@ -283,10 +285,8 @@ class SheetsRepository:
                 ws.batch_clear(['A2:P' + str(existing)])
         except Exception:
             pass
-
         ws.update(rows, value_input_option='USER_ENTERED')
         logger.info('dashboard: wrote ' + str(len(snapshots)) + ' rows with formulas')
-
 
 
 sheets_repository = SheetsRepository()
