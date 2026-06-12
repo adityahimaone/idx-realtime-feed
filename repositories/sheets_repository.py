@@ -65,6 +65,10 @@ DASHBOARD_HEADER = [
     "ARA Potential",
     "Foreign Interest",
     "Signal",
+    "ARA Candidate",
+    "Scalp Suitability",
+    "Long Term Pick",
+    "Final Recommendation",
 ]
 
 
@@ -228,7 +232,7 @@ class SheetsRepository:
                     snap.support_price if snap.support_price is not None else "",
                     snap.resistance_price if snap.resistance_price is not None else "",
                     snap.source.value,
-                    snap.timestamp.isoformat(),
+                    snap.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 ]
             )
 
@@ -263,7 +267,7 @@ class SheetsRepository:
             return ws
 
     def _build_formula_rows(self, snapshots: list[OrderbookSnapshot], realtime_sheet_name: str | None = None) -> list[list]:
-        """Build formula-referenced rows for Dashboard Formula [IRW].
+        """Build formula-referenced rows for Dashboard Formula.
 
         Each formula references ='Realtime_Watchlist [IRW]'!col{row} so values are live.
         Sheet name wrapped in single quotes because of the space + brackets.
@@ -289,6 +293,8 @@ class SheetsRepository:
             ref_ara_d = f'IF(OR({pla}=0,{pp}=0),"",ROUND(({pla}-{pp})/{pp}*100,2))'
             ref_arb_d = f'IF(OR({plb}=0,{pp}=0),"",ROUND(({pp}-{plb})/{pp}*100,2))'
 
+            # Excel row references inside Dashboard / Dashboard Formula sheet
+            # Ticker=A, Last=B, Chg%=C, B/A=D, Spread=E, ARA_d=F, ARB_d=G, FNet=H, Vol=I, Support=J, Res=K, BPS=L, ScalpS=M, ARA_pot=N, FInt=O, Sig=P
             rows.append([
                 f"={pw}",
                 f"={pp}",
@@ -306,6 +312,10 @@ class SheetsRepository:
                 f'=IF(IFERROR({ref_ara_d}*1,99)<=5,4,IF(IFERROR({ref_ara_d}*1,99)<=10,2,0))+IF({pc}>3,3,IF({pc}>0,1,0))+IF(IFERROR({ref_bar}*1,0)>=1.2,2,0)',
                 f'=IF(ABS({pf})>5000000000,10,IF(ABS({pf})>2000000000,7,IF(ABS({pf})>1000000000,5,IF(ABS({pf})>500000000,3,IF(ABS({pf})>100000000,1,0)))))',
                 f'=TRIM(IF(AND(IFERROR({ref_bar}*1,0)>=2,IFERROR({pc}*1,0)>0),"BUY ","")&IF(IFERROR({pc}*1,0)>3,"MOMENTUM ","")&IF(IFERROR({ref_ara_d}*1,99)<=5,"ARA ","")&IF(IFERROR({pf}*1,0)>1000000000,"FOREIGN ",""))',
+                f'=IF(AND(F{r}<=5,C{r}>3,D{r}>=1.5),"HIGH",IF(AND(F{r}<=10,C{r}>0),"MEDIUM","LOW"))',
+                f'=IF(AND(C{r}>3,D{r}>=1.5),"STRONG SCALP",IF(AND(C{r}>1,D{r}>=1.1),"MODERATE","NOT SUITABLE"))',
+                f'=IF(AND(H{r}>100000000,C{r}>=-2,C{r}<=2),"ACCUMULATION","HOLD/WATCH")',
+                f'=IF(AND(L{r}>=7,O{r}>=5),"STRONG BUY",IF(L{r}>=5,"BUY",IF(L{r}<=3,"SELL","HOLD")))'
             ])
         return rows
 
@@ -315,8 +325,18 @@ class SheetsRepository:
         sid = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
         sh = self._get_client().open_by_key(sid)
 
-        # -- 1. Dashboard [IRW] -- script values --
-        ws = self._get_or_create_sheet("Dashboard [IRW]", len(HEADER), sid)
+        # Route dynamically for Light Mode target sheet naming separation
+        if realtime_sheet_name == "Light Watchlist [IRW]":
+            dashboard_sheet_name = "Dashboard Lighthouse [IRW]"
+            formula_sheet_name = "Dashboard Formula Lighthouse [IRW]"
+            recap_sheet_name = "Market Recap Lighthouse [IRW]"
+        else:
+            dashboard_sheet_name = "Dashboard [IRW]"
+            formula_sheet_name = "Dashboard Formula [IRW]"
+            recap_sheet_name = "Market Recap [IRW]"
+
+        # -- 1. Dashboard -- script values --
+        ws = self._get_or_create_sheet(dashboard_sheet_name, len(HEADER), sid)
         rows = [HEADER]
         rows_data = []
         for snap in snapshots:
@@ -329,8 +349,8 @@ class SheetsRepository:
         for ci, h in enumerate(HEADER, 1):
             ws.update_cell(1, ci, h)
 
-        # -- 2. Dashboard Formula [IRW] -- GS formulas --
-        fws = self._get_or_create_sheet("Dashboard Formula [IRW]", len(DASHBOARD_HEADER), sid)
+        # -- 2. Dashboard Formula -- GS formulas --
+        fws = self._get_or_create_sheet(formula_sheet_name, len(DASHBOARD_HEADER), sid)
         frows = self._build_formula_rows(snapshots, realtime_sheet_name=realtime_sheet_name)
         fws.clear()
         if len(frows) > 1:
@@ -338,14 +358,14 @@ class SheetsRepository:
         for ci, h in enumerate(DASHBOARD_HEADER, 1):
             fws.update_cell(1, ci, h)
 
-        # -- 3. Market Recap sheet (separate, scales with any watchlist size) --
+        # -- 3. Market Recap sheet --
         try:
-            rw = self._get_or_create_sheet("Market Recap [IRW]", 4, sid)
+            rw = self._get_or_create_sheet(recap_sheet_name, 4, sid)
             recap = compute_market_recap(rows_data)
             rw.clear()
             if recap:
                 rw.update(recap, value_input_option="USER_ENTERED")
-            logger.info("sheets: wrote Dashboard [IRW] + Dashboard Formula [IRW] + Market Recap")
+            logger.info(f"sheets: wrote {dashboard_sheet_name} + {formula_sheet_name} + {recap_sheet_name}")
         except Exception as exc:
             logger.error(f"sheets: recap failed: {exc}")
 

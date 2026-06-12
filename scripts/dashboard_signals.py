@@ -8,6 +8,7 @@ HEADER = [
     "ARA Distance %", "ARB Distance %", "Foreign Net", "Volume",
     "Support", "Resistance", "Buy Pressure Score", "Scalp Score",
     "ARA Potential", "Foreign Interest", "Signal",
+    "ARA Candidate", "Scalp Suitability", "Long Term Pick", "Final Recommendation"
 ]
 
 
@@ -73,8 +74,49 @@ def compute_signal(bar, chg, ara_d, fnet) -> str:
     return " ".join(parts)
 
 
+def compute_ara_candidate(ara_d: float | None, chg: float | None, bar: float | None) -> str:
+    if ara_d is None or chg is None or bar is None:
+        return "LOW"
+    if ara_d <= 5.0 and chg > 3.0 and bar >= 1.5:
+        return "HIGH"
+    if ara_d <= 10.0 and chg > 0.0:
+        return "MEDIUM"
+    return "LOW"
+
+
+def compute_scalp_suitability(chg: float | None, bar: float | None) -> str:
+    if chg is None or bar is None:
+        return "NOT SUITABLE"
+    if chg > 3.0 and bar >= 1.5:
+        return "STRONG SCALP"
+    if chg > 1.0 and bar >= 1.1:
+        return "MODERATE"
+    return "NOT SUITABLE"
+
+
+def compute_long_term_pick(fnet: float | None, chg: float | None) -> str:
+    if fnet is None or chg is None:
+        return "HOLD/WATCH"
+    if fnet > 100_000_000 and -2.0 <= chg <= 2.0:
+        return "ACCUMULATION"
+    return "HOLD/WATCH"
+
+
+def compute_final_recommendation(buy_pressure: float, foreign_interest: int) -> str:
+    if buy_pressure >= 7.0 and foreign_interest >= 5:
+        return "STRONG BUY"
+    if buy_pressure >= 5.0:
+        return "BUY"
+    if buy_pressure <= 3.0:
+        return "SELL"
+    return "HOLD"
+
+
 def compute_dashboard_row(snap) -> list[str]:
     """One dashboard row from OrderbookSnapshot. Uses schema computed properties."""
+    bp = compute_buy_pressure(snap.bid_ask_ratio)
+    fi = compute_foreign_interest(snap.fnet)
+    
     return [
         snap.ticker,
         fmt(snap.last_price, 0),
@@ -87,11 +129,15 @@ def compute_dashboard_row(snap) -> list[str]:
         fmt_int(snap.volume) if snap.volume else "",
         fmt(snap.support_price, 0) if snap.support_price else "",
         fmt(snap.resistance_price, 0) if snap.resistance_price else "",
-        fmt(compute_buy_pressure(snap.bid_ask_ratio), 1),
+        fmt(bp, 1),
         str(compute_scalp_score(snap.bid_ask_ratio, snap.change_pct)),
         str(compute_ara_potential(snap.bid_ask_ratio, snap.change_pct, snap.ara_distance_pct)),
-        str(compute_foreign_interest(snap.fnet)),
+        str(fi),
         compute_signal(snap.bid_ask_ratio, snap.change_pct, snap.ara_distance_pct, snap.fnet),
+        compute_ara_candidate(snap.ara_distance_pct, snap.change_pct, snap.bid_ask_ratio),
+        compute_scalp_suitability(snap.change_pct, snap.bid_ask_ratio),
+        compute_long_term_pick(snap.fnet, snap.change_pct),
+        compute_final_recommendation(bp, fi)
     ]
 
 
