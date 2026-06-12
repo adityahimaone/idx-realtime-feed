@@ -238,131 +238,55 @@ class SheetsRepository:
             ws.freeze(1)
             return ws
 
-    def write_dashboard(self, snapshots: list[OrderbookSnapshot]) -> None:
-        """Write Dashboard [Stockbit] with formulas referencing Realtime_Watchlist.
-
-        Formulas are Google Sheets native — auto-recalculate when Realtime_Watchlist
-        updates. Signal column uses IF() conditions based on computed columns.
-        """
+    def write_dashboard(self, snapshots):
         ws = self._get_dashboard_worksheet()
-
         rows = [DASHBOARD_HEADER]
         for i, snap in enumerate(snapshots):
-            row = i + 2  # Sheet row (header=1, data starts at 2)
+            r = i + 2
+            pp = 'Realtime_Watchlist!B' + str(r)
+            pc = 'Realtime_Watchlist!C' + str(r)
+            pb = 'Realtime_Watchlist!H' + str(r)
+            pa = 'Realtime_Watchlist!I' + str(r)
+            pf = 'Realtime_Watchlist!K' + str(r)
+            pla = 'Realtime_Watchlist!L' + str(r)
+            plb = 'Realtime_Watchlist!M' + str(r)
+            pv = 'Realtime_Watchlist!G' + str(r)
+            ps = 'Realtime_Watchlist!N' + str(r)
+            pr = 'Realtime_Watchlist!O' + str(r)
+            pw = 'Realtime_Watchlist!A' + str(r)
 
-            # Build formulas referencing Realtime_Watchlist columns
-            # Col mapping in RW: A=Ticker, B=Last Price, C=Change%, D=High, E=Low,
-            # F=Open, G=Volume, H=TotBidLot, I=TotAskLot, J=ImbRatio,
-            # K=ForeignNet, L=ARA, M=ARB, N=Support, O=Resistance
-            r = f"Realtime_Watchlist!A{row}"
-
-            ticker_f = f"Realtime_Watchlist!A{row}"
-            price_f = f"Realtime_Watchlist!B{row}"
-            chg_f = f"Realtime_Watchlist!C{row}"
-            bid_f = f"Realtime_Watchlist!H{row}"
-            ask_f = f"Realtime_Watchlist!I{row}"
-            fnet_f = f"Realtime_Watchlist!K{row}"
-            ara_f = f"Realtime_Watchlist!L{row}"
-            arb_f = f"Realtime_Watchlist!M{row}"
-            sup_f = f"Realtime_Watchlist!N{row}"
-            res_f = f"Realtime_Watchlist!O{row}"
-            vol_f = f"Realtime_Watchlist!G{row}"
-
-            # C: Change % — direct ref
-            change_f = f"={chg_f}"
-
-            # D: Bid/Ask Ratio = bid_lot / ask_lot
-            bar_f = f"=IF({ask_f}=0,"",ROUND({bid_f}/{ask_f},2))"
-
-            # E: Spread % = (best_ask - best_bid) / last_price * 100
-            # best_bid = max bid = bid column (col H has totals, not levels)
-            # We can't easily calc spread from aggregates, so approximate
-            spread_f = "=IFERROR(0,"N/A")"
-
-            # F: ARA Distance % = (ARA - Last) / Last * 100
-            ara_dist_f = f"=IF(OR({ara_f}=0,{price_f}=0),"",ROUND(({ara_f}-{price_f})/{price_f}*100,2))"
-
-            # G: ARB Distance % = (Last - ARB) / Last * 100
-            arb_dist_f = f"=IF(OR({arb_f}=0,{price_f}=0),"",ROUND(({price_f}-{arb_f})/{price_f}*100,2))"
-
-            # H: Foreign Net — direct
-            fnet_formula_f = f"={fnet_f}"
-
-            # I: Volume — direct
-            vol_formula_f = f"={vol_f}"
-
-            # J: Support — direct
-            sup_formula_f = f"={sup_f}"
-
-            # K: Resistance — direct
-            res_formula_f = f"={res_f}"
-
-            # L: Buy Pressure Score = min(bid/ask * 5, 10)
-            bp_f = f"=IF({bar_f}="",0,MIN(ROUND({bar_f}*5,1),10))"
-
-            # M: Scalp Score = tight spread + momentum
-            scalp_f = f"=IF({bar_f}>=1.2,2,0) + IF({chg_f}>5,3,IF({chg_f}>2,2,IF({chg_f}>0,1,0)))"
-
-            # N: ARA Potential = close to ARA + upward momentum
-            ara_pot_f = f"=IF(AND({ara_dist_f}<="",0,IF({ara_dist_f}<=5,4,IF({ara_dist_f}<=10,2,0))) + IF({chg_f}>3,3,IF({chg_f}>0,1,0)) + IF({bar_f}>=1.2,2,0))"
-            # Simpler version:
-            ara_pot_f_simple = f"=IF({ara_dist_f}="",0,IF({ara_dist_f}<=5,4,IF({ara_dist_f}<=10,2,0))) + IF({chg_f}>3,3,IF({chg_f}>0,1,0)) + IF(IFERROR({bar_f}*1,0)>=1.2,2,0)"
-
-            # O: Foreign Interest (0-10 based on magnitude)
-            fi_f = f"=IF(ABS({fnet_f})>5000000000,10,IF(ABS({fnet_f})>2000000000,7,IF(ABS({fnet_f})>1000000000,5,IF(ABS({fnet_f})>500000000,3,IF(ABS({fnet_f})>100000000,1,0)))))"
-
-            # P: Signal — composite
-            # If spread <= X + change > Y => SCALP
-            # If ara_dist <= 10 + change > 0 => ARA
-            # If fnet > 1B + change > 0 => FOREIGN
-            # If bid/ask >= 1.5 + change > 0 => LONG
-            # Fallback: WATCH
-            signal_f = (
-                f"=IF(IFERROR({fnet_f}*1,0)>1000000000*IF(IFERROR({chg_f}*1,0)>0,"FOREIGN",""),"
-                f"IF(IFERROR({ara_dist_f}*1,99)<=10*IF(IFERROR({chg_f}*1,0)>0,"ARA | ",""),"
-                f"IF(AND(IFERROR({bar_f}*1,0)>=1.2,IFERROR({chg_f}*1,0)>2),"SCALP | ",""),"
-                f"IF(AND(IFERROR({bar_f}*1,0)>=1.5,IFERROR({chg_f}*1,0)>0),"LONG | ",""),"
-                f""WATCH")))"
-            )
-            # Simplier signal with TEXTJOIN:
-            signal_f = (
-                f'=TRIM('
-                f'IF(AND(IFERROR({bar_f}*1,0)>=2,IFERROR({chg_f}*1,0)>0),"BUY ","")&'
-                f'IF(IFERROR({chg_f}*1,0)>3,"MOMENTUM ","")&'
-                f'IF(IFERROR({ara_dist_f}*1,99)<=5,"ARA ","")&'
-                f'IF(IFERROR({fnet_f}*1,0)>1000000000,"FOREIGN ","")'
-                f')'
-            )
+            f_price = '=' + pp
+            f_change = '=' + pc
+            f_bar = '=IF(' + pa + '=0,"",ROUND(' + pb + '/' + pa + ',2))'
+            f_spread = '=IFERROR(0,"N/A")'
+            f_ara_d = '=IF(OR(' + pla + '=0,' + pp + '=0),"",ROUND((' + pla + '-' + pp + ')/' + pp + '*100,2))'
+            f_arb_d = '=IF(OR(' + plb + '=0,' + pp + '=0),"",ROUND((' + pp + '-' + plb + ')/' + pp + '*100,2))'
+            f_fnet = '=' + pf
+            f_vol = '=' + pv
+            f_sup = '=' + ps
+            f_res = '=' + pr
+            f_bp = '=IF(' + f_bar + '="",0,MIN(ROUND(' + f_bar + '*5,1),10))'
+            f_scalp = '=IF(IFERROR(' + f_bar + '*1,0)>=1.2,2,0)+IF(' + pc + '>5,3,IF(' + pc + '>2,2,IF(' + pc + '>0,1,0)))'
+            f_ara_p = '=IF(IFERROR(' + f_ara_d + '*1,99)<=5,4,IF(IFERROR(' + f_ara_d + '*1,99)<=10,2,0))+IF(' + pc + '>3,3,IF(' + pc + '>0,1,0))+IF(IFERROR(' + f_bar + '*1,0)>=1.2,2,0)'
+            f_fi = '=IF(ABS(' + pf + ')>5000000000,10,IF(ABS(' + pf + ')>2000000000,7,IF(ABS(' + pf + ')>1000000000,5,IF(ABS(' + pf + ')>500000000,3,IF(ABS(' + pf + ')>100000000,1,0)))))'
+            f_sig = '=TRIM(IF(AND(IFERROR(' + f_bar + '*1,0)>=2,IFERROR(' + pc + '*1,0)>0),"BUY ","")&IF(IFERROR(' + pc + '*1,0)>3,"MOMENTUM ","")&IF(IFERROR(' + f_ara_d + '*1,99)<=5,"ARA ","")&IF(IFERROR(' + pf + '*1,0)>1000000000,"FOREIGN ",""))'
 
             rows.append([
-                f"={ticker_f}",
-                f"={price_f}",
-                change_f,
-                bar_f,
-                spread_f,
-                ara_dist_f,
-                arb_dist_f,
-                fnet_formula_f,
-                vol_formula_f,
-                sup_formula_f,
-                res_formula_f,
-                bp_f,
-                scalp_f,
-                ara_pot_f_simple,
-                fi_f,
-                signal_f,
+                '=' + pw, f_price, f_change, f_bar, f_spread,
+                f_ara_d, f_arb_d, f_fnet, f_vol, f_sup, f_res,
+                f_bp, f_scalp, f_ara_p, f_fi, f_sig,
             ])
 
-        # Clear and write
         try:
             existing = len(ws.get_all_values())
             if existing > 1:
-                ws.batch_clear([f"A2:P{existing}"])
+                ws.batch_clear(['A2:P' + str(existing)])
         except Exception:
             pass
 
-        ws.update(rows, value_input_option="USER_ENTERED")
-        logger.info(f"dashboard: wrote {len(snapshots)} rows with formulas")
+        ws.update(rows, value_input_option='USER_ENTERED')
+        logger.info('dashboard: wrote ' + str(len(snapshots)) + ' rows with formulas')
+
 
 
 sheets_repository = SheetsRepository()
