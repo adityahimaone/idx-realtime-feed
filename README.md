@@ -89,9 +89,14 @@ Copy `Authorization: Bearer <token>` → paste ke `.env` sebagai `STOCKBIT_BEARE
 
 ### 3. Run
 
-**Perpetual Sync Feed:**
+**Perpetual Sync Feed (Full Mode - fetches orderbook depth per ticker):**
 ```bash
 uv run python main.py
+```
+
+**Perpetual Sync Feed (Light Mode - batch-fetches watchlist in a single request):**
+```bash
+uv run python main_light.py
 ```
 
 **Orderbook Analysis CLI (Single Run):**
@@ -109,8 +114,16 @@ uv run python ticker_stream.py <TICKER>
 ```
 
 ### 4. Deploy (PM2)
+
+**Full Mode:**
 ```bash
 pm2 start main.py --interpreter python3 --name idx-realtime-feed \
+    --cwd /path/to/idx-realtime-feed
+```
+
+**Light Mode:**
+```bash
+pm2 start main_light.py --interpreter python3 --name idx-realtime-feed-light \
     --cwd /path/to/idx-realtime-feed
 ```
 
