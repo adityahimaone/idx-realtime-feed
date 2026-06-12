@@ -136,27 +136,31 @@ class SheetsRepository:
             return ws
 
     def get_watchlist(self) -> list[str]:
-        """Read tickers from All Tickers sheet (col B, skip header).
-        
-        Tickers come as 'IDX:TICKER' format — strips prefix.
+        """Fetch watchlist from Stockbit exodus API.
+
+        Falls back to DEFAULT_WATCHLIST if API call fails.
         """
+        import httpx
+
         try:
-            sh = self._get_client().open_by_key(config.MARKET_ALPHA_SPREADSHEET_ID)
-            ws = sh.worksheet(config.WATCHLIST_SHEET_NAME)
-            values = ws.col_values(2)[1:]  # col B, skip header
-            tickers = []
-            for v in values:
-                v = v.strip().upper()
-                if v:
-                    # Strip IDX: prefix if present
-                    if v.startswith("IDX:"):
-                        v = v[4:]
-                    tickers.append(v)
+            token = config.STOCKBIT_BEARER_TOKEN
+            wid = config.STOCKBIT_WATCHLIST_ID
+            url = f"https://exodus.stockbit.com/watchlist/{wid}?page=1&limit=100&setfincol=1"
+            resp = httpx.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            tickers = [item["symbol"] for item in data["data"]["result"]]
             result = tickers[: config.MAX_WATCHLIST_SIZE]
-            logger.info(f"sheets: watchlist: {len(result)} tickers from '{config.WATCHLIST_SHEET_NAME}'")
+            logger.info(
+                f"sheets: watchlist: {len(result)} tickers from Stockbit API"
+            )
             return result
         except Exception as exc:
-            logger.error(f"sheets: cannot read watchlist: {exc}")
+            logger.error(f"sheets: cannot fetch watchlist: {exc}")
             return config.DEFAULT_WATCHLIST or []
 
     def write_snapshots(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:

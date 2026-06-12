@@ -34,6 +34,7 @@ class Config:
 
     # --- Sync behaviour ---
     SYNC_INTERVAL_SECONDS: int = int(os.getenv("SYNC_INTERVAL_SECONDS", "45"))
+    STOCKBIT_WATCHLIST_ID: int = int(os.getenv("STOCKBIT_WATCHLIST_ID", "2624360"))
     MAX_WATCHLIST_SIZE: int = int(os.getenv("MAX_WATCHLIST_SIZE", "20"))
     DEFAULT_WATCHLIST: list[str] = ["TPIA", "BREN", "CUAN"]
 
