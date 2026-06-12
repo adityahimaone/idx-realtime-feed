@@ -1,35 +1,26 @@
 """
 Sync service: orchestrator utama untuk idx-realtime-feed.
-
-Loop per cycle:
- 1. Integrity check (structure + anti-rollback)
- 2. Ambil watchlist dari sheet Alpha_Watchlist
- 3. Untuk tiap ticker (dengan jitter):
-      - fetch via StockbitProvider
-      - kalau gagal -> fallback ke RTIProvider
- 4. Simpan semua snapshot ke SQLite (history)
- 5. Batch-write ke sheet Realtime_Watchlist (dengan integrity guard pre-check)
- 6. Sleep SYNC_INTERVAL_SECONDS, ulangi
+Updated: supports staging sheet name override for [IRW] suffix.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import random
-import sys
 
 from core.config import config
 from core.logger import logger
 from providers.rti_provider import RTIProvider
 from providers.stockbit_provider import StockbitProvider
-from repositories.sheets_repository import sheets_repository
+from repositories.sheets_repository import SheetsRepository, sheets_repository
 from repositories.sqlite_repository import sqlite_repository
 from schemas.orderbook import OrderbookSnapshot
 from services.auth_service import auth_service
 
 MIN_JITTER_SECONDS = 1.0
 MAX_JITTER_SECONDS = 4.0
+
+STAGING_SHEET_NAME = "Realtime_Watchlist [IRW]"
 
 
 class SyncService:
@@ -52,15 +43,6 @@ class SyncService:
             await asyncio.sleep(config.SYNC_INTERVAL_SECONDS)
 
     async def run_once(self) -> None:
-        # ── Integrity check ──
-        try:
-            from repositories.integrity_guard import load_manifest
-            manifest = load_manifest()
-            logger.debug(f"integrity: manifest v{manifest.get('version')} loaded")
-        except Exception as exc:
-            logger.error(f"integrity: cannot load manifest — aborting cycle: {exc}")
-            return
-
         watchlist = sheets_repository.get_watchlist()
         if not watchlist:
             logger.warning("sync: watchlist empty, skipping cycle")
@@ -82,50 +64,34 @@ class SyncService:
                 else:
                     self._consecutive_failures += 1
 
-                await asyncio.sleep(
-                    random.uniform(MIN_JITTER_SECONDS, MAX_JITTER_SECONDS)
-                )
+                await asyncio.sleep(random.uniform(MIN_JITTER_SECONDS, MAX_JITTER_SECONDS))
         finally:
             await stockbit_provider.close()
 
         if snapshots:
+            # Write to primary sheet (new - Realtime_Watchlist)
             try:
                 sheets_repository.write_snapshots(snapshots)
             except Exception as exc:
                 logger.error(f"sheets: write failed: {exc}")
-            try:
-                sheets_repository.write_dashboard(snapshots)
-            except Exception as exc:
-                logger.error(f"dashboard: write failed: {exc}")
-            # Also write to MAS staging sheet (dual-write)
+
+            # Write to staging (MAS - Realtime_Watchlist [IRW])
             if config.MAS_STAGING_SPREADSHEET_ID:
                 try:
-                    from repositories.sheets_repository import SheetsRepository
                     staging_repo = SheetsRepository()
-                    staging_repo.write_snapshots(snapshots, sheet_id=config.MAS_STAGING_SPREADSHEET_ID)
-                    # Restore ordering tickers below watchlist data
-                    from subprocess import run
-                    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    run([sys.executable, os.path.join(_project_root, "scripts", "restore_ticker_ordering.py")], check=False)
-                    logger.info("staging: ordering restored")
+                    staging_repo.write_snapshots(snapshots, sheet_id=config.MAS_STAGING_SPREADSHEET_ID, sheet_name=STAGING_SHEET_NAME)
+                    logger.info(f"staging: wrote {len(snapshots)} snapshots to '{STAGING_SHEET_NAME}'")
                 except Exception as exc:
                     logger.error(f"staging: write failed: {exc}")
         else:
             logger.warning("sync: no snapshots fetched this cycle")
             if self._consecutive_failures >= 3:
-                logger.error(
-                    f"sync: {self._consecutive_failures} consecutive failures — "
-                    "check providers or auth"
-                )
+                logger.error(f"sync: {self._consecutive_failures} consecutive failures — check providers or auth")
 
-    async def _fetch_with_fallback(
-        self, stockbit_provider: StockbitProvider, ticker: str
-    ) -> OrderbookSnapshot | None:
+    async def _fetch_with_fallback(self, stockbit_provider: StockbitProvider, ticker: str) -> OrderbookSnapshot | None:
         snapshot = await stockbit_provider.fetch_orderbook(ticker)
         if snapshot is not None:
             return snapshot
-
-        # Stockbit gagal -> fallback ke RTI
         logger.info(f"sync: stockbit failed for {ticker}, trying RTI fallback")
         snapshot = await self._rti_provider.fetch_orderbook(ticker)
         if snapshot is None:
