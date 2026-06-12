@@ -2,8 +2,8 @@
   "version": "1.0.0",
   "name": "idx-realtime-feed",
   "spreadsheet": {
-    "sheet_id": "1wr2f6drQBqBUxikdJqSp1YVPaHF13qX0V3c7p4hkw5U",
-    "sheet_name": "Realtime_Watchlist",
+    "sheet_id": "1WOPSU6JLoinVUexwJzbB-vpQS-4hoDp8TskP3GcKYaE",
+    "sheet_name": "Realtime_Watchlist [IRW]",
     "columns": [
       "Ticker",
       "Last Price",
@@ -15,6 +15,9 @@
       "Total Bid Lot",
       "Total Ask Lot",
       "Imbalance Ratio",
+      "Foreign Net",
+      "ARA",
+      "ARB",
       "Support",
       "Resistance",
       "Source",
@@ -27,9 +30,9 @@
     "priority_column": "B"
   },
   "sync_interval_seconds": 45,
-  "max_watchlist_size": 20,
+  "max_watchlist_size": 50,
   "providers": {
-    "primary": "stockbit_obscura",
-    "fallback": "rti_obscura"
+    "primary": "stockbit",
+    "fallback": "rti"
   }
 }

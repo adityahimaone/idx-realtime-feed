@@ -83,6 +83,18 @@ class SyncService:
                     logger.info(f"staging: wrote {len(snapshots)} snapshots to '{STAGING_SHEET_NAME}'")
                 except Exception as exc:
                     logger.error(f"staging: write failed: {exc}")
+            # Also update Dashboard [IRW] + Dashboard Formula [IRW] on staging
+            if config.MAS_STAGING_SPREADSHEET_ID:
+                try:
+                    staging_repo = SheetsRepository()
+                    staging_repo.write_dashboard(
+                        snapshots,
+                        sheet_id=config.MAS_STAGING_SPREADSHEET_ID,
+                        realtime_sheet_name=STAGING_SHEET_NAME,
+                    )
+                    logger.info(f"staging: updated Dashboard [IRW] + Dashboard Formula [IRW]")
+                except Exception as exc:
+                    logger.error(f"staging: dashboard write failed: {exc}")
         else:
             logger.warning("sync: no snapshots fetched this cycle")
             if self._consecutive_failures >= 3:

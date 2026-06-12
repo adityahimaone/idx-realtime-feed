@@ -113,9 +113,26 @@ def check_anti_rollback(ws) -> tuple[bool, str | None]:
         if last_update.tzinfo is None:
             last_update = last_update.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
-        # Unparseable timestamp — allow write, log warning
-        logger.warning(f"anti-rollback: unparseable timestamp '{last_update_str}'")
-        return True, None
+        # Try fallback formats (e.g. '12 Jun 21:44', '12 Jun 2026 21:44')
+        _FALLBACK_FMTS = [
+            "%d %b %H:%M",
+            "%d %b %Y %H:%M",
+            "%d %b %Y %H:%M:%S",
+        ]
+        parsed = None
+        for fmt in _FALLBACK_FMTS:
+            try:
+                parsed = datetime.strptime(last_update_str, fmt).replace(tzinfo=timezone.utc)
+                # '%d %b %H:%M' has no year — assume current year
+                if parsed.year == 1900:
+                    parsed = parsed.replace(year=datetime.now(timezone.utc).year)
+                break
+            except (ValueError, TypeError):
+                continue
+        if parsed is None:
+            logger.warning(f"anti-rollback: unparseable timestamp '{last_update_str}'")
+            return True, None
+        last_update = parsed
 
     now = datetime.now(timezone.utc)
     drift = (last_update - now).total_seconds()

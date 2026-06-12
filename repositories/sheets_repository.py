@@ -117,20 +117,22 @@ class SheetsRepository:
             "Set GOOGLE_SERVICE_ACCOUNT env var or ensure ~/.hermes/google_token.json exists."
         )
 
-    def _get_realtime_worksheet(self, sheet_id: str | None = None) -> gspread.Worksheet:
+    def _get_realtime_worksheet(self, sheet_id: str | None = None, sheet_name: str | None = None) -> gspread.Worksheet:
         """Get or create the Realtime_Watchlist worksheet.
         
         Args:
             sheet_id: Override sheet ID. Uses config.MARKET_ALPHA_SPREADSHEET_ID if None.
+            sheet_name: Override worksheet title. Uses config.REALTIME_SHEET_NAME if None.
         """
         target_id = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
+        realtime_sheet_name = sheet_name or config.REALTIME_SHEET_NAME
         sh = self._get_client().open_by_key(target_id)
         try:
-            return sh.worksheet(config.REALTIME_SHEET_NAME)
+            return sh.worksheet(realtime_sheet_name)
         except gspread.WorksheetNotFound:
-            logger.info(f"sheets: creating '{config.REALTIME_SHEET_NAME}'")
+            logger.info(f"sheets: creating '{realtime_sheet_name}'")
             ws = sh.add_worksheet(
-                title=config.REALTIME_SHEET_NAME, rows=100, cols=len(HEADER_ROW)
+                title=realtime_sheet_name, rows=100, cols=len(HEADER_ROW)
             )
             ws.append_row(HEADER_ROW)
             return ws
@@ -163,12 +165,13 @@ class SheetsRepository:
             logger.error(f"sheets: cannot fetch watchlist: {exc}")
             return config.DEFAULT_WATCHLIST or []
 
-    def write_snapshots(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
+    def write_snapshots(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None, sheet_name: str | None = None) -> None:
         """Overwrite Realtime_Watchlist with latest snapshots.
 
         Args:
             snapshots: List of orderbook data to write
             sheet_id: Override sheet ID. Uses config.MARKET_ALPHA_SPREADSHEET_ID if None.
+            sheet_name: Override worksheet title. Uses config.REALTIME_SHEET_NAME if None.
             
         Integrity checks performed before write:
           - header validation against manifest
@@ -180,7 +183,7 @@ class SheetsRepository:
             log_integrity_event,
         )
 
-        ws = self._get_realtime_worksheet(sheet_id)
+        ws = self._get_realtime_worksheet(sheet_id, sheet_name)
 
         # -- Integrity check 1: header structure --
         valid, issues = ensure_integrity(ws)
@@ -259,14 +262,14 @@ class SheetsRepository:
             ws.freeze(1)
             return ws
 
-    def _build_formula_rows(self, snapshots: list[OrderbookSnapshot]) -> list[list]:
+    def _build_formula_rows(self, snapshots: list[OrderbookSnapshot], realtime_sheet_name: str | None = None) -> list[list]:
         """Build formula-referenced rows for Dashboard Formula [IRW].
 
         Each formula references ='Realtime_Watchlist [IRW]'!col{row} so values are live.
         Sheet name wrapped in single quotes because of the space + brackets.
-        Uses config.REALTIME_SHEET_NAME so rename in .env propagates automatically.
+        Uses config.REALTIME_SHEET_NAME or provided override so rename propagates.
         """
-        rw_ref = f"'{config.REALTIME_SHEET_NAME}'"
+        rw_ref = f"'{realtime_sheet_name or config.REALTIME_SHEET_NAME}'"
         rows = [DASHBOARD_HEADER]
         for i in range(len(snapshots)):
             r = i + 2  # row 2 onwards in Realtime_Watchlist [IRW]
@@ -306,7 +309,7 @@ class SheetsRepository:
             ])
         return rows
 
-    def write_dashboard(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
+    def write_dashboard(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None, realtime_sheet_name: str | None = None) -> None:
         from scripts.dashboard_signals import compute_dashboard_row, compute_market_recap, HEADER
 
         sid = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
@@ -328,7 +331,7 @@ class SheetsRepository:
 
         # -- 2. Dashboard Formula [IRW] -- GS formulas --
         fws = self._get_or_create_sheet("Dashboard Formula [IRW]", len(DASHBOARD_HEADER), sid)
-        frows = self._build_formula_rows(snapshots)
+        frows = self._build_formula_rows(snapshots, realtime_sheet_name=realtime_sheet_name)
         fws.clear()
         if len(frows) > 1:
             fws.update(frows, value_input_option="USER_ENTERED")

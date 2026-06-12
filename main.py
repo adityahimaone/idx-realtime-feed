@@ -16,8 +16,13 @@ from services.sync_service import sync_service
 
 
 async def main() -> None:
-    logger.info("idx-realtime-feed: starting up")
-    await sync_service.run_forever()
+    try:
+        logger.info("idx-realtime-feed: starting up")
+        await sync_service.run_forever()
+    except asyncio.CancelledError:
+        logger.info("idx-realtime-feed: shutdown requested")
+    except KeyboardInterrupt:
+        logger.info("idx-realtime-feed: interrupted")
 
 
 if __name__ == "__main__":
