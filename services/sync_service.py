@@ -15,7 +15,9 @@ Loop per cycle:
 from __future__ import annotations
 
 import asyncio
+import os
 import random
+import sys
 
 from core.config import config
 from core.logger import logger
@@ -101,7 +103,11 @@ class SyncService:
                     from repositories.sheets_repository import SheetsRepository
                     staging_repo = SheetsRepository()
                     staging_repo.write_snapshots(snapshots, sheet_id=config.MAS_STAGING_SPREADSHEET_ID)
-                    logger.info("staging: wrote %d snapshots", len(snapshots))
+                    # Restore ordering tickers below watchlist data
+                    from subprocess import run
+                    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    run([sys.executable, os.path.join(_project_root, "scripts", "restore_ticker_ordering.py")], check=False)
+                    logger.info("staging: ordering restored")
                 except Exception as exc:
                     logger.error(f"staging: write failed: {exc}")
         else:
