@@ -1,6 +1,6 @@
-"""Signal computation for IRW Dashboard."""
+"""Signal computation for IRW Dashboard.
+Uses OrderbookSnapshot computed properties."""
 from datetime import datetime
-from typing import TypedDict
 
 
 HEADER = [
@@ -9,8 +9,6 @@ HEADER = [
     "Support", "Resistance", "Buy Pressure Score", "Scalp Score",
     "ARA Potential", "Foreign Interest", "Signal",
 ]
-
-RECAP_HEADER = ["Metric", "Value", "Metric", "Value"]
 
 
 def fmt(val, decimals=2) -> str:
@@ -25,11 +23,13 @@ def fmt_int(val) -> str:
 
 
 def compute_buy_pressure(bar: float | None) -> float:
+    """0-10 score: higher bid/ask ratio = more buying pressure."""
     if not bar or bar == 0: return 0
     return max(min(round(bar * 5, 1), 10), 0)
 
 
 def compute_scalp_score(bar: float | None, chg: float | None) -> int:
+    """0-5: bid strength + momentum."""
     s = 0
     if bar and bar >= 1.2: s += 2
     if chg:
@@ -40,6 +40,7 @@ def compute_scalp_score(bar: float | None, chg: float | None) -> int:
 
 
 def compute_ara_potential(bar: float | None, chg: float | None, ara_d: float | None) -> int:
+    """0-9: ARA proximity + momentum + bid strength."""
     s = 0
     if ara_d is not None:
         if ara_d <= 5: s += 4
@@ -52,6 +53,7 @@ def compute_ara_potential(bar: float | None, chg: float | None, ara_d: float | N
 
 
 def compute_foreign_interest(fnet: float | None) -> int:
+    """0-10 based on foreign net magnitude."""
     if not fnet: return 0
     a = abs(fnet)
     if a > 5_000_000_000: return 10
@@ -72,57 +74,33 @@ def compute_signal(bar, chg, ara_d, fnet) -> str:
 
 
 def compute_dashboard_row(snap) -> list[str]:
-    """Compute one dashboard row. Returns list matching HEADER."""
-    ticker = snap.ticker
-    last_price = fmt(snap.last_price, 0)
-    change_pct = fmt(snap.change_pct, 2)
-
-    bar = None
-    if snap.total_bid_lot and snap.total_ask_lot and snap.total_ask_lot > 0:
-        bar = round(snap.total_bid_lot / snap.total_ask_lot, 2)
-
-    spread_pct = fmt(snap.spread_pct, 2) if snap.spread_pct is not None else ""
-
-    ara_dist = None
-    if snap.ara_price and snap.last_price and snap.last_price > 0:
-        ara_dist = round((snap.ara_price - snap.last_price) / snap.last_price * 100, 2)
-
-    arb_dist = None
-    if snap.arb_price and snap.last_price and snap.last_price > 0:
-        arb_dist = round((snap.last_price - snap.arb_price) / snap.last_price * 100, 2)
-
-    fnet = snap.fnet
-    volume = fmt_int(snap.volume)
-    support = fmt(snap.support_price, 0) if snap.support_price else ""
-    resistance = fmt(snap.resistance_price, 0) if snap.resistance_price else ""
-
+    """One dashboard row from OrderbookSnapshot. Uses schema computed properties."""
     return [
-        ticker,
-        last_price,
-        change_pct,
-        fmt(bar, 2) if bar is not None else "",
-        spread_pct,
-        fmt(ara_dist, 2) if ara_dist is not None else "",
-        fmt(arb_dist, 2) if arb_dist is not None else "",
-        fmt_int(fnet) if fnet is not None else "",
-        volume,
-        support,
-        resistance,
-        fmt(compute_buy_pressure(bar), 1),
-        str(compute_scalp_score(bar, snap.change_pct)),
-        str(compute_ara_potential(bar, snap.change_pct, ara_dist)),
-        str(compute_foreign_interest(fnet)),
-        compute_signal(bar, snap.change_pct, ara_dist, fnet),
+        snap.ticker,
+        fmt(snap.last_price, 0),
+        fmt(snap.change_pct, 2),
+        fmt(snap.bid_ask_ratio, 2) if snap.bid_ask_ratio is not None else "",
+        fmt(snap.spread, 2) if snap.spread is not None else "",
+        fmt(snap.ara_distance_pct, 2) if snap.ara_distance_pct is not None else "",
+        fmt(snap.arb_distance_pct, 2) if snap.arb_distance_pct is not None else "",
+        fmt_int(snap.fnet) if snap.fnet else "",
+        fmt_int(snap.volume) if snap.volume else "",
+        fmt(snap.support_price, 0) if snap.support_price else "",
+        fmt(snap.resistance_price, 0) if snap.resistance_price else "",
+        fmt(compute_buy_pressure(snap.bid_ask_ratio), 1),
+        str(compute_scalp_score(snap.bid_ask_ratio, snap.change_pct)),
+        str(compute_ara_potential(snap.bid_ask_ratio, snap.change_pct, snap.ara_distance_pct)),
+        str(compute_foreign_interest(snap.fnet)),
+        compute_signal(snap.bid_ask_ratio, snap.change_pct, snap.ara_distance_pct, snap.fnet),
     ]
 
 
 def compute_market_recap(rows_data: list[list]) -> list[list]:
-    """Compute market recap from dashboard data rows."""
+    """Market recap from dashboard data. Returns rows for separate sheet."""
     if not rows_data:
         return []
 
     total = len(rows_data)
-
     buy_sig = sum(1 for r in rows_data if "BUY" in (r[15] if len(r) > 15 else ""))
     mom_sig = sum(1 for r in rows_data if "MOMENTUM" in (r[15] if len(r) > 15 else ""))
     for_sig = sum(1 for r in rows_data if "FOREIGN" in (r[15] if len(r) > 15 else ""))
@@ -153,7 +131,6 @@ def compute_market_recap(rows_data: list[list]) -> list[list]:
     neg_fnet = sum(v for v in fnet_list if v < 0)
     fnet_count = sum(1 for v in fnet_list if abs(v) > 100_000_000)
 
-    # Rank signals
     def sig_weight(s):
         w = 0
         if "BUY" in s: w += 3
@@ -190,7 +167,7 @@ def compute_market_recap(rows_data: list[list]) -> list[list]:
         ["Total FNet", fmt_int(total_fnet), "Tickers w/ Foreign", str(fnet_count)],
         ["Positive Flow", fmt_int(pos_fnet), "Negative Flow", fmt_int(neg_fnet)],
         ["", "", "", ""],
-        ["TOP SIGNALS (ranked)", "", "", ""],
+        ["TOP SIGNALS", "", "", "", ""],
     ]
 
     for item in ranked:
@@ -199,5 +176,4 @@ def compute_market_recap(rows_data: list[list]) -> list[list]:
     if not ranked:
         rows.append(["No active signals", "", "", ""])
 
-    # Pad first row to have proper width
     return rows

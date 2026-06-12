@@ -167,12 +167,12 @@ class SheetsRepository:
 
         ws = self._get_realtime_worksheet(sheet_id)
 
-        # ── Integrity check 1: header structure ──
+        # -- Integrity check 1: header structure --
         valid, issues = ensure_integrity(ws)
         if not valid:
             log_integrity_event("STRUCTURE_FAIL", "; ".join(issues))
             logger.error(
-                f"integrity: sheet structure invalid — {len(issues)} issues. "
+                f"integrity: sheet structure invalid -- {len(issues)} issues. "
                 "Run guard manually to fix."
             )
             logger.warning("integrity: proceeding anyway (will add header if missing)")
@@ -181,15 +181,15 @@ class SheetsRepository:
             if not any(actual):
                 ws.append_row(HEADER_ROW)
 
-        # ── Integrity check 2: anti-rollback ──
+        # -- Integrity check 2: anti-rollback --
         safe, reason = check_anti_rollback(ws)
         if not safe:
             log_integrity_event("ROLLBACK_BLOCKED", reason or "unknown")
             logger.error(f"integrity: anti-rollback blocked write: {reason}")
-            # Don't abort — allow overwrite but log. The check is advisory
+            # Don't abort -- allow overwrite but log. The check is advisory
             # for this use case (realtime feed should always overwrite).
 
-        # ── Build rows ──
+        # -- Build rows --
         rows = [HEADER_ROW]
         for snap in snapshots:
             rows.append(
@@ -214,7 +214,7 @@ class SheetsRepository:
                 ]
             )
 
-        # ── Batch write ──
+        # -- Batch write --
         # Clear existing content first (leave header) then write
         try:
             existing_rows = len(ws.get_all_values())
@@ -232,51 +232,101 @@ class SheetsRepository:
         log_integrity_event("WRITE_OK", f"{len(snapshots)} snapshots, {len(rows)} rows total")
 
 
-
-    def _get_dashboard_worksheet(self, sheet_id: str | None = None) -> gspread.Worksheet:
-        """Get or create the Dashboard [Stockbit] worksheet."""
+    def _get_or_create_sheet(self, title: str, cols: int, sheet_id: str | None = None) -> gspread.Worksheet:
+        """Get or create a worksheet by title. Freezes row 1."""
         target_id = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
         sh = self._get_client().open_by_key(target_id)
-        title = "Dashboard [Stockbit]"
         try:
             return sh.worksheet(title)
         except gspread.WorksheetNotFound:
             logger.info(f"sheets: creating '{title}'")
-            ws = sh.add_worksheet(title=title, rows=500, cols=len(DASHBOARD_HEADER))
-            ws.append_row(DASHBOARD_HEADER)
-            # Freeze header row
+            ws = sh.add_worksheet(title=title, rows=500, cols=cols)
             ws.freeze(1)
             return ws
 
+    def _build_formula_rows(self, snapshots: list[OrderbookSnapshot]) -> list[list]:
+        """Build formula-referenced rows for Dashboard Formula [IRW].
+
+        Each formula references =Realtime_Watchlist!col{row} so values are live.
+        """
+        rows = [DASHBOARD_HEADER]
+        for i in range(len(snapshots)):
+            r = i + 2  # row 2 onwards in Realtime_Watchlist
+            pw = f"Realtime_Watchlist!A{r}"
+            pp = f"Realtime_Watchlist!B{r}"
+            pc = f"Realtime_Watchlist!C{r}"
+            pb = f"Realtime_Watchlist!H{r}"
+            pa = f"Realtime_Watchlist!I{r}"
+            pf = f"Realtime_Watchlist!K{r}"
+            pla = f"Realtime_Watchlist!L{r}"
+            plb = f"Realtime_Watchlist!M{r}"
+            pv = f"Realtime_Watchlist!G{r}"
+            ps = f"Realtime_Watchlist!N{r}"
+            pr = f"Realtime_Watchlist!O{r}"
+
+            ref_bar = f'IF({pa}=0,"",ROUND({pb}/{pa},2))'
+            ref_ara_d = f'IF(OR({pla}=0,{pp}=0),"",ROUND(({pla}-{pp})/{pp}*100,2))'
+            ref_arb_d = f'IF(OR({plb}=0,{pp}=0),"",ROUND(({pp}-{plb})/{pp}*100,2))'
+
+            rows.append([
+                f"={pw}",
+                f"={pp}",
+                f"={pc}",
+                f"={ref_bar}",
+                '=IFERROR(0,"N/A")',
+                f"={ref_ara_d}",
+                f"={ref_arb_d}",
+                f"={pf}",
+                f"={pv}",
+                f"={ps}",
+                f"={pr}",
+                f'=IF({ref_bar}="",0,MIN(ROUND({ref_bar}*5,1),10))',
+                f'=IF(IFERROR({ref_bar}*1,0)>=1.2,2,0)+IF({pc}>5,3,IF({pc}>2,2,IF({pc}>0,1,0)))',
+                f'=IF(IFERROR({ref_ara_d}*1,99)<=5,4,IF(IFERROR({ref_ara_d}*1,99)<=10,2,0))+IF({pc}>3,3,IF({pc}>0,1,0))+IF(IFERROR({ref_bar}*1,0)>=1.2,2,0)',
+                f'=IF(ABS({pf})>5000000000,10,IF(ABS({pf})>2000000000,7,IF(ABS({pf})>1000000000,5,IF(ABS({pf})>500000000,3,IF(ABS({pf})>100000000,1,0)))))',
+                f'=TRIM(IF(AND(IFERROR({ref_bar}*1,0)>=2,IFERROR({pc}*1,0)>0),"BUY ","")&IF(IFERROR({pc}*1,0)>3,"MOMENTUM ","")&IF(IFERROR({ref_ara_d}*1,99)<=5,"ARA ","")&IF(IFERROR({pf}*1,0)>1000000000,"FOREIGN ",""))',
+            ])
+        return rows
+
     def write_dashboard(self, snapshots: list[OrderbookSnapshot], sheet_id: str | None = None) -> None:
         from scripts.dashboard_signals import compute_dashboard_row, compute_market_recap, HEADER
-        
-        ws = self._get_dashboard_worksheet(sheet_id)
+
+        sid = sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID
+        sh = self._get_client().open_by_key(sid)
+
+        # -- 1. Dashboard [IRW] -- script values --
+        ws = self._get_or_create_sheet("Dashboard [IRW]", len(HEADER), sid)
         rows = [HEADER]
         rows_data = []
         for snap in snapshots:
             row = compute_dashboard_row(snap)
             rows.append(row)
             rows_data.append(row)
-            
         ws.clear()
-        ws.update(rows, value_input_option="USER_ENTERED")
-        
-        # Write Market Recap to separate sheet
+        if len(rows) > 1:
+            ws.update(rows, value_input_option="USER_ENTERED")
+        for ci, h in enumerate(HEADER, 1):
+            ws.update_cell(1, ci, h)
+
+        # -- 2. Dashboard Formula [IRW] -- GS formulas --
+        fws = self._get_or_create_sheet("Dashboard Formula [IRW]", len(DASHBOARD_HEADER), sid)
+        frows = self._build_formula_rows(snapshots)
+        fws.clear()
+        if len(frows) > 1:
+            fws.update(frows, value_input_option="USER_ENTERED")
+        for ci, h in enumerate(DASHBOARD_HEADER, 1):
+            fws.update_cell(1, ci, h)
+
+        # -- 3. Market Recap sheet (separate, scales with any watchlist size) --
         try:
-            sh = self._get_client().open_by_key(sheet_id or config.MARKET_ALPHA_SPREADSHEET_ID)
-            try:
-                rw = sh.worksheet("Market Recap")
-            except gspread.WorksheetNotFound:
-                rw = sh.add_worksheet(title="Market Recap", rows=100, cols=4)
-            
-            recap_rows = compute_market_recap(rows_data)
+            rw = self._get_or_create_sheet("Market Recap", 4, sid)
+            recap = compute_market_recap(rows_data)
             rw.clear()
-            rw.update(recap_rows, value_input_option="USER_ENTERED")
-            logger.info("sheets: wrote dashboard values + Market Recap")
+            if recap:
+                rw.update(recap, value_input_option="USER_ENTERED")
+            logger.info("sheets: wrote Dashboard [IRW] + Dashboard Formula [IRW] + Market Recap")
         except Exception as exc:
             logger.error(f"sheets: recap failed: {exc}")
-
 
 
 sheets_repository = SheetsRepository()
