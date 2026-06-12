@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "name": "idx-realtime-feed",
   "spreadsheet": {
+    "sheet_id": "1wr2f6drQBqBUxikdJqSp1YVPaHF13qX0V3c7p4hkw5U",
     "sheet_name": "Realtime_Watchlist",
     "columns": [
       "Ticker",
@@ -10,12 +11,21 @@
       "Total Bid Lot",
       "Total Ask Lot",
       "Imbalance Ratio",
-      "Support",
-      "Resistance",
+      "Support (Max Bid Lot)",
+      "Resistance (Max Ask Lot)",
       "Source",
       "Last Update (UTC)"
     ]
   },
+  "watchlist_input_sheet": {
+    "sheet_name": "Alpha_Watchlist",
+    "ticker_column": "A",
+    "priority_column": "B"
+  },
   "sync_interval_seconds": 45,
-  "max_watchlist_size": 20
+  "max_watchlist_size": 20,
+  "providers": {
+    "primary": "stockbit_obscura",
+    "fallback": "rti_obscura"
+  }
 }
