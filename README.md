@@ -67,14 +67,23 @@ cp .env.example .env
 # Isi STOCKBIT_USERNAME, STOCKBIT_PASSWORD, MARKET_ALPHA_SPREADSHEET_ID
 ```
 
-### 2. Get/Refresh Token (BYOB Method)
-Jika token kadaluarsa, gunakan browser Brave (atau Chrome) untuk mendapatkan token baru:
-1. Pastikan Anda sudah login ke Stockbit di browser.
-2. Gunakan skill `idx-realtime-feed-token-refresh` atau secara manual:
-   - Buka `https://stockbit.com/watchlist`
-   - Buka DevTools > Network, filter `exodus`
-   - Salin header `Authorization: Bearer <token>` dari salah satu request.
-   - Update `STOCKBIT_BEARER_TOKEN` di `.env`.
+### 2. Get/Refresh Token
+
+**Option A — CDP Script (recommended):**
+```bash
+# 1. Start Brave dengan remote debugging (sekali doang):
+/Applications/Brave\ Browser.app/Contents/MacOS/Brave\ Browser \
+    --remote-debugging-port=9222
+
+# 2. Login ke stockbit.com di browser
+
+# 3. Refresh token:
+uv run python scripts/refresh_token.py
+```
+
+**Option B — Manual:**
+Buka `https://stockbit.com/watchlist` → DevTools > Network > filter `exodus` →
+Copy `Authorization: Bearer <token>` → paste ke `.env` sebagai `STOCKBIT_BEARER_TOKEN`.
 
 ### 3. Run
 ```bash
