@@ -32,6 +32,11 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.text import Text
 
+# Add project root to sys.path to allow core.* imports
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 CDP_PORT = 9222
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 STOCKBIT_URL = "https://stockbit.com/watchlist"
@@ -165,6 +170,54 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
         except Exception as e:
             # Watchlist page navigation might timeout if user is logged out and stuck on login page
             pass
+
+        # Check if we need to log in (auto-login support for headless VPS / Obscura)
+        await asyncio.sleep(2)  # Wait for redirects
+        current_url = page.url
+        is_login_page = "login" in current_url.lower()
+        if not is_login_page:
+            try:
+                is_login_page = await page.locator("input[name='username']").count() > 0 or await page.locator("#username").count() > 0
+            except Exception:
+                is_login_page = False
+
+        if is_login_page:
+            console.print("→ Detected login page. Attempting automatic login using credentials from .env...")
+            try:
+                from core.config import config
+                username = config.STOCKBIT_USERNAME
+                password = config.STOCKBIT_PASSWORD
+
+                if not username or not password:
+                    console.print("[yellow]⚠️ STOCKBIT_USERNAME or STOCKBIT_PASSWORD not set in .env.[/yellow]")
+                    console.print("[yellow]Please make sure they are set for auto-login to work on headless environments.[/yellow]")
+                else:
+                    # Find and fill username
+                    username_selector = "input[name='username']" if await page.locator("input[name='username']").count() > 0 else "#username"
+                    await page.wait_for_selector(username_selector, timeout=10000)
+                    await page.fill(username_selector, username)
+
+                    # Find and fill password
+                    password_selector = "input[name='password']" if await page.locator("input[name='password']").count() > 0 else "#password"
+                    await page.fill(password_selector, password)
+
+                    # Find and click submit button
+                    submit_selector = "button[type='submit']"
+                    if await page.locator(submit_selector).count() == 0:
+                        submit_selector = "button:has-text('Masuk'), button:has-text('Log In'), #loginbutton"
+
+                    console.print("→ Submitting credentials...")
+                    await page.click(submit_selector)
+
+                    # Wait for redirect and for network to settle
+                    await asyncio.sleep(5)
+
+                    # If still on login page or redirecting to home, try going to watchlist again
+                    if "login" in page.url.lower():
+                        console.print("[yellow]⚠️ Auto-login did not redirect yet. Navigating back to watchlist...[/yellow]")
+                        await page.goto(STOCKBIT_URL, wait_until="load", timeout=30000)
+            except Exception as e:
+                console.print(f"[yellow]⚠️ Auto-login failed: {e}. If running locally, please login manually.[/yellow]")
 
         # We show a beautiful live spinner animation
         max_wait_seconds = 120
