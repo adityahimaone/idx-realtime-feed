@@ -164,15 +164,15 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
 
         page.on("request", handle_request)
 
-        console.print(f"→ Navigating to {STOCKBIT_URL} ...")
+        LOGIN_URL = "https://stockbit.com/login"
+        console.print(f"→ Navigating to {LOGIN_URL} ...")
         try:
-            await page.goto(STOCKBIT_URL, wait_until="load", timeout=45000)
+            await page.goto(LOGIN_URL, wait_until="load", timeout=45000)
         except Exception as e:
-            # Watchlist page navigation might timeout if user is logged out and stuck on login page
             pass
 
         # Check if we need to log in (auto-login support for headless VPS / Obscura)
-        await asyncio.sleep(2)  # Wait for redirects
+        await asyncio.sleep(3)  # Wait for redirects (in case already logged in)
         current_url = page.url
         is_login_page = "login" in current_url.lower()
         if not is_login_page:
@@ -211,13 +211,16 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
 
                     # Wait for redirect and for network to settle
                     await asyncio.sleep(5)
-
-                    # If still on login page or redirecting to home, try going to watchlist again
-                    if "login" in page.url.lower():
-                        console.print("[yellow]⚠️ Auto-login did not redirect yet. Navigating back to watchlist...[/yellow]")
-                        await page.goto(STOCKBIT_URL, wait_until="load", timeout=30000)
             except Exception as e:
                 console.print(f"[yellow]⚠️ Auto-login failed: {e}. If running locally, please login manually.[/yellow]")
+
+        # Ensure we end up on the watchlist page to trigger the exodus API call
+        if "watchlist" not in page.url.lower():
+            console.print(f"→ Navigating to watchlist page: {STOCKBIT_URL} ...")
+            try:
+                await page.goto(STOCKBIT_URL, wait_until="load", timeout=30000)
+            except Exception:
+                pass
 
         # We show a beautiful live spinner animation
         max_wait_seconds = 120
