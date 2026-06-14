@@ -35,10 +35,22 @@ class ObscuraClient:
         """Context manager: yield satu Page baru, auto-close setelah selesai."""
         async with async_playwright() as pw:
             browser: Browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-            context: BrowserContext = await browser.new_context()
+            
+            # Context-level proxy options if configured
+            proxy_args = {}
+            if config.PROXY_SERVER:
+                proxy_args["proxy"] = {
+                    "server": config.PROXY_SERVER
+                }
+                if config.PROXY_USERNAME:
+                    proxy_args["proxy"]["username"] = config.PROXY_USERNAME
+                if config.PROXY_PASSWORD:
+                    proxy_args["proxy"]["password"] = config.PROXY_PASSWORD
+                    
+            context: BrowserContext = await browser.new_context(**proxy_args)
             page = await context.new_page()
             try:
-                logger.debug(f"obscura: page opened via {self.cdp_url}")
+                logger.debug(f"obscura: page opened via {self.cdp_url} (proxy: {config.PROXY_SERVER or 'none'})")
                 yield page
             finally:
                 await context.close()

@@ -32,6 +32,11 @@ class Config:
     # --- Obscura ---
     OBSCURA_CDP_URL: str = os.getenv("OBSCURA_CDP_URL", "ws://127.0.0.1:9222")
 
+    # --- Proxy Settings (for VPS / Stealth) ---
+    PROXY_SERVER: str = os.getenv("PROXY_SERVER", "")
+    PROXY_USERNAME: str = os.getenv("PROXY_USERNAME", "")
+    PROXY_PASSWORD: str = os.getenv("PROXY_PASSWORD", "")
+
     # --- Sync behaviour ---
     SYNC_INTERVAL_SECONDS: int = int(os.getenv("SYNC_INTERVAL_SECONDS", "45"))
     STOCKBIT_WATCHLIST_ID: int = int(os.getenv("STOCKBIT_WATCHLIST_ID", "2624360"))
