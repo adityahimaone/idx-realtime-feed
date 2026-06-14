@@ -66,15 +66,55 @@ class AuthService:
             async with obscura_client.page() as page:
                 await page.goto("https://stockbit.com/login", wait_until="networkidle")
 
-                # Fill login form
-                await page.fill(
-                    "input[name='username'], input[type='email'], #username",
-                    config.STOCKBIT_USERNAME,
-                )
-                await page.fill(
-                    "input[name='password'], input[type='password'], #password",
-                    config.STOCKBIT_PASSWORD,
-                )
+                # Robust element filling/clicking helpers to bypass strict Playwright visibility blocks on headless browsers
+                async def robust_fill(selector: str, value: str):
+                    try:
+                        await page.wait_for_selector(selector, state="attached", timeout=10000)
+                        await page.fill(selector, value, timeout=5000)
+                        return
+                    except Exception:
+                        pass
+                    try:
+                        await page.evaluate(f"document.querySelector('{selector}').focus()")
+                        await page.keyboard.press("Meta+A")
+                        await page.keyboard.press("Backspace")
+                        await page.keyboard.type(value)
+                        return
+                    except Exception:
+                        pass
+                    try:
+                        await page.evaluate(f"""
+                            const el = document.querySelector('{selector}');
+                            el.value = '{value}';
+                            el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        """)
+                    except Exception as e:
+                        logger.error(f"auth: failed to fill {selector}: {e}")
+
+                async def robust_click(selector: str):
+                    try:
+                        await page.wait_for_selector(selector, state="attached", timeout=10000)
+                        await page.click(selector, timeout=5000)
+                        return
+                    except Exception:
+                        pass
+                    try:
+                        await page.evaluate(f"document.querySelector('{selector}').click()")
+                    except Exception as e:
+                        logger.error(f"auth: failed to click {selector}: {e}")
+
+                # Fill username using id=username as primary
+                username_selector = "#username"
+                if await page.locator(username_selector).count() == 0:
+                    username_selector = "input[name='username']"
+                await robust_fill(username_selector, config.STOCKBIT_USERNAME)
+
+                # Fill password using id=password as primary
+                password_selector = "#password"
+                if await page.locator(password_selector).count() == 0:
+                    password_selector = "input[name='password']"
+                await robust_fill(password_selector, config.STOCKBIT_PASSWORD)
 
                 # Intercept auth response
                 token = None
@@ -100,10 +140,14 @@ class AuthService:
 
                 page.on("response", handle_response)
 
-                # Submit form
-                await page.click(
-                    "button[type='submit'], .login-button, button:has-text('Login')"
-                )
+                # Submit form via Enter key
+                await page.keyboard.press("Enter")
+                
+                # Fallback submit form via submit button
+                submit_selector = "button[type='submit']"
+                if await page.locator(submit_selector).count() == 0:
+                    submit_selector = "button:has-text('Masuk'), button:has-text('Log In'), #loginbutton"
+                await robust_click(submit_selector)
 
                 # Wait for navigation/response
                 await page.wait_for_load_state("networkidle")

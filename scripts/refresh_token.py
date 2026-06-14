@@ -181,6 +181,44 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
             except Exception:
                 is_login_page = False
 
+        # Robust element filling/clicking helpers to bypass strict Playwright visibility blocks on headless browsers
+        async def robust_fill(selector: str, value: str):
+            try:
+                await page.wait_for_selector(selector, state="attached", timeout=10000)
+                await page.fill(selector, value, timeout=5000)
+                return
+            except Exception:
+                pass
+            try:
+                await page.evaluate(f"document.querySelector('{selector}').focus()")
+                await page.keyboard.press("Meta+A")
+                await page.keyboard.press("Backspace")
+                await page.keyboard.type(value)
+                return
+            except Exception:
+                pass
+            try:
+                await page.evaluate(f"""
+                    const el = document.querySelector('{selector}');
+                    el.value = '{value}';
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                """)
+            except Exception as e:
+                console.print(f"[yellow]⚠️ Failed to fill {selector}: {e}[/yellow]")
+
+        async def robust_click(selector: str):
+            try:
+                await page.wait_for_selector(selector, state="attached", timeout=10000)
+                await page.click(selector, timeout=5000)
+                return
+            except Exception:
+                pass
+            try:
+                await page.evaluate(f"document.querySelector('{selector}').click()")
+            except Exception as e:
+                console.print(f"[yellow]⚠️ Failed to click {selector}: {e}[/yellow]")
+
         if is_login_page:
             console.print("→ Detected login page. Attempting automatic login using credentials from .env...")
             try:
@@ -192,22 +230,31 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                     console.print("[yellow]⚠️ STOCKBIT_USERNAME or STOCKBIT_PASSWORD not set in .env.[/yellow]")
                     console.print("[yellow]Please make sure they are set for auto-login to work on headless environments.[/yellow]")
                 else:
-                    # Find and fill username
-                    username_selector = "input[name='username']" if await page.locator("input[name='username']").count() > 0 else "#username"
-                    await page.wait_for_selector(username_selector, timeout=10000)
-                    await page.fill(username_selector, username)
+                    # Fill username using id=username as primary selector
+                    username_selector = "#username"
+                    if await page.locator(username_selector).count() == 0:
+                        username_selector = "input[name='username']"
+                    
+                    console.print("→ Filling username...")
+                    await robust_fill(username_selector, username)
 
-                    # Find and fill password
-                    password_selector = "input[name='password']" if await page.locator("input[name='password']").count() > 0 else "#password"
-                    await page.fill(password_selector, password)
+                    # Fill password using id=password as primary selector
+                    password_selector = "#password"
+                    if await page.locator(password_selector).count() == 0:
+                        password_selector = "input[name='password']"
+                    
+                    console.print("→ Filling password...")
+                    await robust_fill(password_selector, password)
 
-                    # Find and click submit button
+                    # Try submitting by pressing Enter key on password field
+                    console.print("→ Submitting credentials (Enter key)...")
+                    await page.keyboard.press("Enter")
+                    
+                    # Fallback click on login button
                     submit_selector = "button[type='submit']"
                     if await page.locator(submit_selector).count() == 0:
                         submit_selector = "button:has-text('Masuk'), button:has-text('Log In'), #loginbutton"
-
-                    console.print("→ Submitting credentials...")
-                    await page.click(submit_selector)
+                    await robust_click(submit_selector)
 
                     # Wait for redirect and for network to settle
                     await asyncio.sleep(5)
