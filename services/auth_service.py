@@ -106,7 +106,10 @@ class AuthService:
                             # Fallback click via JS
                             await page.evaluate("document.querySelector('button[type=\"submit\"], button:has-text(\"Masuk\"), button:has-text(\"Log In\")').click()")
                     except Exception as e:
-                        logger.error(f"auth: JS submit error: {e}")
+                        if "destroyed" in str(e).lower() or "navigation" in str(e).lower():
+                            pass
+                        else:
+                            logger.error(f"auth: JS submit error: {e}")
 
                 # Fill username using id=username as primary
                 username_selector = "#username"

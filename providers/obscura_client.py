@@ -48,6 +48,31 @@ class ObscuraClient:
                     proxy_args["proxy"]["password"] = config.PROXY_PASSWORD
                     
             context: BrowserContext = await browser.new_context(**proxy_args)
+            
+            # Polyfill missing IndexedDB APIs in Obscura to prevent Stockbit scripts from crashing
+            await context.add_init_script("""
+                window.IDBIndex = window.IDBIndex || class {};
+                window.IDBDatabase = window.IDBDatabase || class {};
+                window.IDBRequest = window.IDBRequest || class {};
+                window.IDBTransaction = window.IDBTransaction || class {};
+                window.IDBKeyRange = window.IDBKeyRange || class {};
+                window.IDBFactory = window.IDBFactory || class {};
+                
+                if (!window.indexedDB) {
+                    window.indexedDB = {
+                        open: function() {
+                            return {
+                                onupgradeneeded: null,
+                                onsuccess: null,
+                                onerror: null,
+                                addEventListener: function() {},
+                                removeEventListener: function() {}
+                            };
+                        }
+                    };
+                }
+            """)
+            
             page = await context.new_page()
             try:
                 logger.debug(f"obscura: page opened via {self.cdp_url} (proxy: {config.PROXY_SERVER or 'none'})")

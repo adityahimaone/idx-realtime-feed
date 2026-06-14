@@ -151,6 +151,33 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                     pass
             return None
 
+        # Register the IndexedDB polyfill on the context to avoid ReferenceError on Obscura
+        try:
+            await context.add_init_script("""
+                window.IDBIndex = window.IDBIndex || class {};
+                window.IDBDatabase = window.IDBDatabase || class {};
+                window.IDBRequest = window.IDBRequest || class {};
+                window.IDBTransaction = window.IDBTransaction || class {};
+                window.IDBKeyRange = window.IDBKeyRange || class {};
+                window.IDBFactory = window.IDBFactory || class {};
+                
+                if (!window.indexedDB) {
+                    window.indexedDB = {
+                        open: function() {
+                            return {
+                                onupgradeneeded: null,
+                                onsuccess: null,
+                                onerror: null,
+                                addEventListener: function() {},
+                                removeEventListener: function() {}
+                            };
+                        }
+                    };
+                }
+            """)
+        except Exception:
+            pass
+
         # Intercept exodus API requests for token
         async def handle_request(request):
             nonlocal token
@@ -221,7 +248,11 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                     # Fallback click via JS
                     await page.evaluate("document.querySelector('button[type=\"submit\"], button:has-text(\"Masuk\"), button:has-text(\"Log In\")').click()")
             except Exception as e:
-                console.print(f"  [yellow]⚠️ JS submit error: {e}[/yellow]")
+                if "destroyed" in str(e).lower() or "navigation" in str(e).lower():
+                    # This is normal when form submission navigates to the next page
+                    pass
+                else:
+                    console.print(f"  [yellow]⚠️ JS submit error: {e}[/yellow]")
 
         if is_login_page:
             console.print("→ Detected login page. Attempting automatic login using credentials from .env...")
