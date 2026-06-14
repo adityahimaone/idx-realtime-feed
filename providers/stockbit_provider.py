@@ -52,12 +52,26 @@ class StockbitProvider:
         """
         try:
             resp = await self._client.get(f"/{ticker.upper()}")
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
-                logger.warning(f"stockbit: token expired/invalid for {ticker}")
+            
+            # If token gets unauthorized, try to refresh and retry
+            if resp.status_code == 401:
+                logger.warning(f"stockbit: token unauthorized (401) for {ticker}. Attempting to auto-refresh...")
+                from services.auth_service import auth_service
+                new_token = await auth_service.refresh_token(force=True)
+                if new_token:
+                    self._token = new_token
+                    self._client.headers["Authorization"] = f"Bearer {new_token}"
+                    # Retry once
+                    logger.info(f"stockbit: retrying fetch for {ticker} with new token...")
+                    resp = await self._client.get(f"/{ticker.upper()}")
+                    resp.raise_for_status()
+                else:
+                    logger.error("stockbit: failed to auto-refresh token on 401.")
+                    return None
             else:
-                logger.warning(f"stockbit: HTTP {exc.response.status_code} for {ticker}")
+                resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(f"stockbit: HTTP {exc.response.status_code} for {ticker}")
             return None
         except httpx.HTTPError as exc:
             logger.warning(f"stockbit: request error for {ticker}: {exc}")

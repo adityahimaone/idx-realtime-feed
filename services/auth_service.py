@@ -27,19 +27,22 @@ class AuthService:
 
     async def get_token(self) -> str:
         """Return token. Priority: env var > cache > Obscura login."""
-        # 1. Direct bearer token from env (most reliable)
+        # 1. Direct bearer token from env (check if valid and not expired)
         env_token = config.STOCKBIT_BEARER_TOKEN
-        if env_token:
-            logger.debug("auth: using env STOCKBIT_BEARER_TOKEN")
+        if env_token and not self._is_jwt_expired(env_token):
+            logger.debug("auth: using valid env STOCKBIT_BEARER_TOKEN")
             return env_token
 
         # 2. Cached token
         cached = self._read_cache()
-        if cached and not self._is_expired(cached):
-            logger.debug("auth: using cached token")
+        if cached and not self._is_expired(cached) and not self._is_jwt_expired(cached["token"]):
+            logger.debug("auth: using valid cached token")
+            # Also update config.STOCKBIT_BEARER_TOKEN in case env was old
+            config.STOCKBIT_BEARER_TOKEN = cached["token"]
             return cached["token"]
 
-        # 3. Login via Obscura
+        # 3. Login via Obscura (expired or missing)
+        logger.info("auth: token is missing or expired. Refreshing...")
         return await self.refresh_token()
 
     async def refresh_token(self, force: bool = False) -> str:
@@ -126,6 +129,8 @@ class AuthService:
             if token:
                 logger.info("auth: token acquired via Obscura")
                 self._write_cache(token)
+                self._write_env(token)
+                config.STOCKBIT_BEARER_TOKEN = token  # Update in-memory
                 return token
             else:
                 logger.error("auth: could not capture token from login flow")
@@ -158,6 +163,53 @@ class AuthService:
         fetched_at = cached.get("fetched_at", 0)
         ttl = cached.get("ttl_seconds", 0)
         return (time.time() - fetched_at) > ttl
+
+    @staticmethod
+    def _is_jwt_expired(token: str) -> bool:
+        """Decode JWT payload without verifying signature to check expiration."""
+        try:
+            import base64
+            parts = token.split(".")
+            if len(parts) != 3:
+                return True
+            
+            payload_b64 = parts[1]
+            padding = 4 - len(payload_b64) % 4
+            if padding != 4:
+                payload_b64 += "=" * padding
+            decoded = base64.urlsafe_b64decode(payload_b64)
+            payload = json.loads(decoded)
+            
+            exp = payload.get("exp")
+            if not exp:
+                return False
+            
+            # Allow 60 seconds buffer
+            return time.time() > (exp - 60)
+        except Exception:
+            return True
+
+    def _write_env(self, token: str) -> None:
+        """Write the token back to the .env file so it is persistent."""
+        import re
+        env_path = Path(__file__).parent.parent / ".env"
+        if not env_path.exists():
+            return
+        try:
+            content = env_path.read_text()
+            if "STOCKBIT_BEARER_TOKEN=" in content:
+                new_content = re.sub(
+                    r"^STOCKBIT_BEARER_TOKEN=.*$",
+                    f"STOCKBIT_BEARER_TOKEN={token}",
+                    content,
+                    flags=re.MULTILINE,
+                )
+            else:
+                new_content = content.rstrip() + f"\nSTOCKBIT_BEARER_TOKEN={token}\n"
+            env_path.write_text(new_content)
+            logger.info("auth: .env file updated with new token")
+        except Exception as e:
+            logger.error(f"auth: failed to write token to .env: {e}")
 
 
 auth_service = AuthService()
