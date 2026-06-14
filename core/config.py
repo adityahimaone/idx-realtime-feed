@@ -31,6 +31,7 @@ class Config:
 
     # --- Obscura ---
     OBSCURA_CDP_URL: str = os.getenv("OBSCURA_CDP_URL", "ws://127.0.0.1:9222")
+    USE_STANDARD_CHROMIUM: bool = os.getenv("USE_STANDARD_CHROMIUM", "true").lower() == "true"
 
     # --- Proxy Settings (for VPS / Stealth) ---
     PROXY_SERVER: str = os.getenv("PROXY_SERVER", "")

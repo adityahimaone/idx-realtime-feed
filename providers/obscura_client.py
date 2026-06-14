@@ -34,7 +34,13 @@ class ObscuraClient:
     async def page(self) -> AsyncIterator[Page]:
         """Context manager: yield satu Page baru, auto-close setelah selesai."""
         async with async_playwright() as pw:
-            browser: Browser = await pw.chromium.connect_over_cdp(self.cdp_url)
+            # Check if we should use standard Playwright Chromium instead of Obscura
+            if config.USE_STANDARD_CHROMIUM:
+                logger.debug("obscura_client: launching standard Playwright Chromium (headless)")
+                browser: Browser = await pw.chromium.launch(headless=True)
+            else:
+                logger.debug(f"obscura_client: connecting to Obscura over CDP: {self.cdp_url}")
+                browser: Browser = await pw.chromium.connect_over_cdp(self.cdp_url)
             
             # Context-level proxy options if configured
             proxy_args = {}
@@ -49,37 +55,49 @@ class ObscuraClient:
                     
             context: BrowserContext = await browser.new_context(**proxy_args)
             
-            # Polyfill missing IndexedDB APIs in Obscura to prevent Stockbit scripts from crashing
-            await context.add_init_script("""
-                window.IDBIndex = window.IDBIndex || class {};
-                window.IDBDatabase = window.IDBDatabase || class {};
-                window.IDBRequest = window.IDBRequest || class {};
-                window.IDBTransaction = window.IDBTransaction || class {};
-                window.IDBKeyRange = window.IDBKeyRange || class {};
-                window.IDBFactory = window.IDBFactory || class {};
-                window.IDBCursor = window.IDBCursor || class {};
-                window.IDBCursorWithValue = window.IDBCursorWithValue || class {};
-                window.IDBOpenDBRequest = window.IDBOpenDBRequest || class {};
-                window.IDBVersionChangeEvent = window.IDBVersionChangeEvent || class {};
-                
-                if (!window.indexedDB) {
-                    window.indexedDB = {
-                        open: function() {
-                            return {
-                                onupgradeneeded: null,
-                                onsuccess: null,
-                                onerror: null,
-                                addEventListener: function() {},
-                                removeEventListener: function() {}
-                            };
-                        }
-                    };
-                }
-            """)
+            # Polyfill missing IndexedDB APIs ONLY in Obscura to prevent Stockbit scripts from crashing
+            if not config.USE_STANDARD_CHROMIUM:
+                await context.add_init_script("""
+                    window.IDBIndex = window.IDBIndex || class {};
+                    window.IDBDatabase = window.IDBDatabase || class {};
+                    window.IDBRequest = window.IDBRequest || class {};
+                    window.IDBTransaction = window.IDBTransaction || class {};
+                    window.IDBKeyRange = window.IDBKeyRange || class {};
+                    window.IDBFactory = window.IDBFactory || class {};
+                    window.IDBCursor = window.IDBCursor || class {};
+                    window.IDBCursorWithValue = window.IDBCursorWithValue || class {};
+                    window.IDBOpenDBRequest = window.IDBOpenDBRequest || class {};
+                    window.IDBVersionChangeEvent = window.IDBVersionChangeEvent || class {};
+                    
+                    if (!window.indexedDB) {
+                        window.indexedDB = {
+                            open: function() {
+                                return {
+                                    onupgradeneeded: null,
+                                    onsuccess: null,
+                                    onerror: null,
+                                    addEventListener: function() {},
+                                    removeEventListener: function() {}
+                                };
+                            }
+                        };
+                    }
+                """)
             
             page = await context.new_page()
+            
+            # Enable asset blocking to make Chromium/Obscura extremely lightweight
+            # This blocks images, stylesheets, and fonts, reducing memory and bandwidth dramatically!
+            await page.route("**/*", lambda route: 
+                route.abort() if route.request.resource_type in ["image", "stylesheet", "font", "media"] 
+                else route.continue_()
+            )
+            
             try:
-                logger.debug(f"obscura: page opened via {self.cdp_url} (proxy: {config.PROXY_SERVER or 'none'})")
+                if config.USE_STANDARD_CHROMIUM:
+                    logger.debug("obscura_client: page opened via standard Chromium")
+                else:
+                    logger.debug(f"obscura_client: page opened via Obscura at {self.cdp_url}")
                 yield page
             finally:
                 await context.close()

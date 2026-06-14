@@ -124,14 +124,29 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
 
     async with async_playwright() as p:
         try:
-            if browser_choice == "Playwright Chromium":
-                console.print("→ Launching Playwright Default Chromium (persistent context)...")
+            if browser_choice == "Playwright Chromium" or browser_choice == "Playwright Headless Chromium":
+                is_headless = browser_choice == "Playwright Headless Chromium"
+                console.print(f"→ Launching Playwright Default Chromium (headless={is_headless}, persistent context)...")
                 user_data_dir = os.path.expanduser("~/.cache/stockbit_playwright_debug")
                 os.makedirs(user_data_dir, exist_ok=True)
+                
+                # Context-level proxy options if configured in .env
+                proxy_args = {}
+                from core.config import config
+                if config.PROXY_SERVER:
+                    proxy_args["proxy"] = {
+                        "server": config.PROXY_SERVER
+                    }
+                    if config.PROXY_USERNAME:
+                        proxy_args["proxy"]["username"] = config.PROXY_USERNAME
+                    if config.PROXY_PASSWORD:
+                        proxy_args["proxy"]["password"] = config.PROXY_PASSWORD
+
                 context = await p.chromium.launch_persistent_context(
                     user_data_dir=user_data_dir,
-                    headless=False,
-                    viewport={"width": 1280, "height": 800}
+                    headless=is_headless,
+                    viewport={"width": 1280, "height": 800},
+                    **proxy_args
                 )
                 page = context.pages[0] if context.pages else await context.new_page()
             else:
@@ -139,6 +154,13 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                 browser = await p.chromium.connect_over_cdp(CDP_URL)
                 context = browser.contexts[0]
                 page = await context.new_page()
+                
+            # Enable asset blocking to make it extremely lightweight
+            # This blocks images, stylesheets, and fonts, reducing memory and bandwidth dramatically!
+            await page.route("**/*", lambda route: 
+                route.abort() if route.request.resource_type in ["image", "stylesheet", "font", "media"] 
+                else route.continue_()
+            )
         except Exception as e:
             console.print(f"[red]✗ Playwright failed to connect/launch: {e}[/red]")
             if "executable doesn't exist" in str(e).lower() or "playwright install" in str(e).lower():
@@ -430,6 +452,7 @@ async def main():
         
     # Option for playwright chromium
     options.append("Launch Playwright Chromium (Standard - requires login)")
+    options.append("Launch Playwright Headless Chromium (VPS Stealth - uses credentials in .env)")
     
     options.append("Exit")
 
@@ -502,6 +525,9 @@ async def main():
         
     elif selected_option == "Launch Playwright Chromium (Standard - requires login)":
         browser_choice = "Playwright Chromium"
+        
+    elif selected_option == "Launch Playwright Headless Chromium (VPS Stealth - uses credentials in .env)":
+        browser_choice = "Playwright Headless Chromium"
 
     token = await refresh_token(browser_choice, browser_path)
 
