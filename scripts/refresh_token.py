@@ -160,6 +160,10 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                 window.IDBTransaction = window.IDBTransaction || class {};
                 window.IDBKeyRange = window.IDBKeyRange || class {};
                 window.IDBFactory = window.IDBFactory || class {};
+                window.IDBCursor = window.IDBCursor || class {};
+                window.IDBCursorWithValue = window.IDBCursorWithValue || class {};
+                window.IDBOpenDBRequest = window.IDBOpenDBRequest || class {};
+                window.IDBVersionChangeEvent = window.IDBVersionChangeEvent || class {};
                 
                 if (!window.indexedDB) {
                     window.indexedDB = {
