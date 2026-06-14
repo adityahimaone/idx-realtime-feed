@@ -181,43 +181,47 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
             except Exception:
                 is_login_page = False
 
-        # Robust element filling/clicking helpers to bypass strict Playwright visibility blocks on headless browsers
+        # JS-based React-compatible form filler (completely avoids CDP Input domain methods like Input.insertText)
         async def robust_fill(selector: str, value: str):
+            js_code = """
+            (selector, val) => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                nativeValueSetter.call(el, val);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            """
             try:
-                await page.wait_for_selector(selector, state="attached", timeout=10000)
-                await page.fill(selector, value, timeout=5000)
-                return
-            except Exception:
-                pass
-            try:
-                await page.evaluate(f"document.querySelector('{selector}').focus()")
-                await page.keyboard.press("Meta+A")
-                await page.keyboard.press("Backspace")
-                await page.keyboard.type(value)
-                return
-            except Exception:
-                pass
-            try:
-                await page.evaluate(f"""
-                    const el = document.querySelector('{selector}');
-                    el.value = '{value}';
-                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                """)
+                await page.wait_for_selector(selector, state="attached", timeout=15000)
+                success = await page.evaluate(f"({js_code})('{selector}', '{value}')")
+                if not success:
+                    console.print(f"  [red]✗ Selector {selector} not found in DOM[/red]")
             except Exception as e:
-                console.print(f"[yellow]⚠️ Failed to fill {selector}: {e}[/yellow]")
+                console.print(f"  [yellow]⚠️ JS fill error for {selector}: {e}[/yellow]")
 
-        async def robust_click(selector: str):
+        async def robust_submit(selector_in_form: str):
+            js_code = """
+            (selector) => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                const form = el.form;
+                if (form) {
+                    form.submit();
+                    return true;
+                }
+                return false;
+            }
+            """
             try:
-                await page.wait_for_selector(selector, state="attached", timeout=10000)
-                await page.click(selector, timeout=5000)
-                return
-            except Exception:
-                pass
-            try:
-                await page.evaluate(f"document.querySelector('{selector}').click()")
+                success = await page.evaluate(f"({js_code})('{selector_in_form}')")
+                if not success:
+                    # Fallback click via JS
+                    await page.evaluate("document.querySelector('button[type=\"submit\"], button:has-text(\"Masuk\"), button:has-text(\"Log In\")').click()")
             except Exception as e:
-                console.print(f"[yellow]⚠️ Failed to click {selector}: {e}[/yellow]")
+                console.print(f"  [yellow]⚠️ JS submit error: {e}[/yellow]")
 
         if is_login_page:
             console.print("→ Detected login page. Attempting automatic login using credentials from .env...")
@@ -246,15 +250,9 @@ async def refresh_token(browser_choice: str, browser_path: str | None) -> str | 
                     console.print("→ Filling password...")
                     await robust_fill(password_selector, password)
 
-                    # Try submitting by pressing Enter key on password field
-                    console.print("→ Submitting credentials (Enter key)...")
-                    await page.keyboard.press("Enter")
-                    
-                    # Fallback click on login button
-                    submit_selector = "button[type='submit']"
-                    if await page.locator(submit_selector).count() == 0:
-                        submit_selector = "button:has-text('Masuk'), button:has-text('Log In'), #loginbutton"
-                    await robust_click(submit_selector)
+                    # Submit form via JS submit() or JS click
+                    console.print("→ Submitting credentials (JS submit)...")
+                    await robust_submit(password_selector)
 
                     # Wait for redirect and for network to settle
                     await asyncio.sleep(5)
