@@ -841,12 +841,14 @@ is_day_trade = now_wib.weekday() < 5 and (
     (now_wib.hour == 16 and now_wib.minute == 0)
 )
 
-live_badge = '<span class="live-label-container">LIVE 🔴</span>' if is_day_trade else '<span class="live-label-container" style="background-color: rgba(245,158,11,0.15); color: #F59E0B; border-color: rgba(245,158,11,0.3);"><span class="pulse-dot pulse-yellow"></span>⏸️ CLOSED</span>'
+badge_text = "LIVE 🔴" if is_day_trade else "CLOSED ⏸️"
+badge_style = "" if is_day_trade else 'style="background-color: rgba(245,158,11,0.15); color: #F59E0B; border-color: rgba(245,158,11,0.3);"'
+live_badge = f'<span id="market_status_badge" class="live-label-container" {badge_style}>{badge_text}</span>'
 
 status_html = f"""
 <div class="status-container">
     <div class="status-item">
-        <strong>Market Status:</strong> {live_badge} ({now_wib.strftime('%Y-%m-%d %H:%M:%S')} WIB)
+        <strong>Market Status:</strong> {live_badge} (<span id="realtime_clock_span">{now_wib.strftime('%Y-%m-%d %H:%M:%S')}</span> WIB)
     </div>
     <div class="status-item">
         <span class="pulse-dot pulse-green"></span>
@@ -865,6 +867,54 @@ status_html = f"""
         <span><strong>Exodus API:</strong> Ready (Deep Analysis)</span>
     </div>
 </div>
+
+<script>
+function startClock() {{
+    setInterval(function() {{
+        var span = document.getElementById("realtime_clock_span") || window.parent.document.getElementById("realtime_clock_span");
+        var badge = document.getElementById("market_status_badge") || window.parent.document.getElementById("market_status_badge");
+        if (span) {{
+            var now = new Date();
+            // Convert to WIB (GMT+7)
+            var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            var wibDate = new Date(utc + (3600000 * 7));
+            
+            var yyyy = wibDate.getFullYear();
+            var mm = String(wibDate.getMonth() + 1).padStart(2, '0');
+            var dd = String(wibDate.getDate()).padStart(2, '0');
+            var hh = String(wibDate.getHours()).padStart(2, '0');
+            var min = String(wibDate.getMinutes()).padStart(2, '0');
+            var sec = String(wibDate.getSeconds()).padStart(2, '0');
+            
+            span.innerText = yyyy + "-" + mm + "-" + dd + " " + hh + ":" + min + ":" + sec;
+            
+            if (badge) {{
+                var day = wibDate.getDay();
+                var hr = wibDate.getHours();
+                var mn = wibDate.getMinutes();
+                var active = false;
+                if (day >= 1 && day <= 5) {{
+                    if ((hr === 9 && mn >= 0) || (hr > 9 && hr < 16) || (hr === 16 && mn === 0)) {{
+                        active = true;
+                    }}
+                }}
+                if (active) {{
+                    badge.innerHTML = "LIVE 🔴";
+                    badge.style.backgroundColor = "rgba(16, 185, 129, 0.15)";
+                    badge.style.color = "#10B981";
+                    badge.style.borderColor = "rgba(16, 185, 129, 0.3)";
+                }} else {{
+                    badge.innerHTML = "CLOSED ⏸️";
+                    badge.style.backgroundColor = "rgba(245, 158, 11, 0.15)";
+                    badge.style.color = "#F59E0B";
+                    badge.style.borderColor = "rgba(245, 158, 11, 0.3)";
+                }}
+            }}
+        }}
+    }}, 1000);
+}}
+startClock();
+</script>
 """
 st.markdown(status_html, unsafe_allow_html=True)
 st.caption("Freshness Fallback Pipeline: Google Sheets ➔ yfinance ➔ IDX. (Stockbit for Deep Analysis only).")
@@ -880,6 +930,10 @@ if "screener_data" not in st.session_state:
     st.session_state.screener_data = {}
 if "last_fetch" not in st.session_state:
     st.session_state.last_fetch = None
+if "custom_watchlist" not in st.session_state:
+    st.session_state.custom_watchlist = []
+if "portfolio" not in st.session_state:
+    st.session_state.portfolio = []
 
 # Populate screener_data with Google Sheets cached prices for all tickers
 for _, row in ticker_df.iterrows():
@@ -912,19 +966,34 @@ with st.sidebar:
     st.markdown("## 🔍 Screener Settings")
     st.markdown("---")
     
+    # Check if query params tells us to scan
+    if st.query_params.get("auto_scan", "false") == "true":
+        st.session_state["trigger_auto_scan"] = True
+        st.query_params["auto_scan"] = "false"
+
     # Auto refresh configuration
     st.subheader("🔁 Auto Refresh")
-    auto_refresh_enabled = st.checkbox("Enable Auto Refresh", value=False, help="Automatically re-trigger scan cycle.")
+    init_auto_refresh = st.query_params.get("auto_refresh", "false") == "true"
+    init_interval = int(st.query_params.get("refresh_interval", "10"))
+    if init_interval not in [5, 10, 15, 30]:
+        init_interval = 10
+
+    auto_refresh_enabled = st.checkbox("Enable Auto Refresh", value=init_auto_refresh, help="Automatically re-trigger scan cycle.")
     if auto_refresh_enabled:
+        interval_options = [5, 10, 15, 30]
+        interval_index = interval_options.index(init_interval) if init_interval in interval_options else 1
         refresh_interval = st.selectbox(
             "Interval (Minutes)",
-            options=[5, 10, 15, 30],
-            index=1,
+            options=interval_options,
+            index=interval_index,
             help="Choose refresh period."
         )
         
-        # Inject standard JS metadata/trigger to auto-reload or utilize streamlit rerun schedule
-        # Simple metadata trick using st.session_state and a timestamp tracking
+        # Sync query params if changed
+        if st.query_params.get("auto_refresh") != "true" or st.query_params.get("refresh_interval") != str(refresh_interval):
+            st.query_params["auto_refresh"] = "true"
+            st.query_params["refresh_interval"] = str(refresh_interval)
+            
         import time
         if "next_refresh_time" not in st.session_state or st.session_state.get("last_refresh_interval") != refresh_interval:
             st.session_state.next_refresh_time = time.time() + (refresh_interval * 60)
@@ -947,6 +1016,7 @@ with st.sidebar:
                 f"""
                 <script>
                 var targetTime = {st.session_state.next_refresh_time * 1000};
+                var refreshInterval = {refresh_interval};
                 
                 function updateTimer() {{
                     var now = new Date().getTime();
@@ -963,8 +1033,8 @@ with st.sidebar:
                     
                     if (diff <= 0) {{
                         clearInterval(interval);
-                        // Trigger reload when reaching zero
-                        window.parent.location.reload();
+                        // Trigger reload with query parameters to preserve state and run scan
+                        window.parent.location.href = window.parent.location.pathname + "?auto_refresh=true&auto_scan=true&refresh_interval=" + refreshInterval;
                     }}
                 }}
                 
@@ -976,7 +1046,10 @@ with st.sidebar:
                 height=0,
                 width=0
             )
-            
+    else:
+        if st.query_params.get("auto_refresh") == "true":
+            st.query_params["auto_refresh"] = "false"
+
     st.markdown("---")
     
     # Delay selector
@@ -1188,8 +1261,10 @@ if st.session_state.screener_data:
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab_wl, tab_port, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📋 Displaying Tickers",
+    "⭐ Custom Watchlist",
+    "💼 Live Portfolio Tracker",
     "🎯 Intraday Buy Recommendations",
     "📊 General Screener Board",
     "🔥 Trending Stocks",
@@ -1197,6 +1272,260 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📈 Minervini Trend",
     "🔍 Deep Stock Analysis (Exodus API)"
 ])
+
+# ============================================================================
+# TAB: CUSTOM WATCHLIST
+# ============================================================================
+with tab_wl:
+    st.markdown("### ⭐ Custom Watchlist")
+    st.caption("Search, add, and monitor custom tickers with live/cached metrics.")
+
+    # Search and Add
+    all_tickers = sorted(ticker_df["Clean Ticker"].unique().tolist())
+    
+    col_add1, col_add2 = st.columns([3, 1])
+    with col_add1:
+        add_ticker_select = st.selectbox(
+            "Search Emiten to Add",
+            options=all_tickers,
+            key="wl_add_select",
+            help="Select ticker to add to watchlist."
+        )
+    with col_add2:
+        st.write("") # Spacer
+        st.write("") # Spacer
+        if st.button("➕ Add to Watchlist", use_container_width=True):
+            if add_ticker_select not in st.session_state.custom_watchlist:
+                st.session_state.custom_watchlist.append(add_ticker_select)
+                st.toast(f"Added {add_ticker_select} to watchlist! 🚀")
+                st.rerun()
+            else:
+                st.warning(f"{add_ticker_select} is already in watchlist.")
+
+    # Watchlist Table
+    if st.session_state.custom_watchlist:
+        wl_data = []
+        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
+        
+        for ticker in st.session_state.custom_watchlist:
+            if ticker in hist_lookup:
+                hist_row = hist_lookup[ticker]
+                # Get live details if refreshed
+                if ticker in st.session_state.screener_data:
+                    raw_data = st.session_state.screener_data[ticker]
+                    price = raw_data["last"]
+                    prev_close = safe_float(hist_row.get("ClosePrev", price))
+                    change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+                    volume = raw_data.get("volume", 0)
+                else:
+                    price = safe_float(hist_row.get("Price"))
+                    change_pct = safe_float(hist_row.get("Change%"))
+                    volume = safe_float(hist_row.get("Volume"))
+                
+                wl_data.append({
+                    "Ticker": ticker,
+                    "Company Name": hist_row.get("Company Name", ""),
+                    "Sector": hist_row.get("Sector", ""),
+                    "Price": price,
+                    "Change %": change_pct,
+                    "Volume": volume,
+                    "RSI14": safe_float(hist_row.get("RSI14")),
+                    "Support": safe_float(hist_row.get("Support")),
+                    "Breakout": safe_float(hist_row.get("Breakout"))
+                })
+        
+        if wl_data:
+            wl_df = pd.DataFrame(wl_data)
+            st.dataframe(
+                wl_df,
+                column_config={
+                    "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
+                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                    "Volume": st.column_config.NumberColumn("Volume", format="%d"),
+                    "RSI14": st.column_config.NumberColumn("RSI14", format="%.2f"),
+                    "Support": st.column_config.NumberColumn("Support", format="IDR %d"),
+                    "Breakout": st.column_config.NumberColumn("Resistance", format="IDR %d"),
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Management (Remove individual or Clear All)
+            col_rem1, col_rem2, col_rem3 = st.columns([2, 1, 1])
+            with col_rem1:
+                rem_ticker_select = st.selectbox(
+                    "Select Ticker to Remove",
+                    options=st.session_state.custom_watchlist,
+                    key="wl_rem_select"
+                )
+            with col_rem2:
+                st.write("") # Spacer
+                st.write("") # Spacer
+                if st.button("❌ Remove Selected", use_container_width=True):
+                    st.session_state.custom_watchlist.remove(rem_ticker_select)
+                    st.toast(f"Removed {rem_ticker_select} from watchlist.")
+                    st.rerun()
+            with col_rem3:
+                st.write("") # Spacer
+                st.write("") # Spacer
+                if st.button("🗑️ Clear Watchlist", use_container_width=True):
+                    st.session_state.custom_watchlist = []
+                    st.toast("Watchlist cleared.")
+                    st.rerun()
+    else:
+        st.info("Watchlist is currently empty. Use the search box above to add stocks.")
+
+# ============================================================================
+# TAB: LIVE PORTFOLIO TRACKER
+# ============================================================================
+with tab_port:
+    st.markdown("### 💼 Live Portfolio Tracker")
+    st.caption("Track your holding value, average buy price, and lots, compared against real-time feed.")
+
+    # Search, Buy Price, and Lot inputs
+    col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1.2, 1.2, 1])
+    with col_p1:
+        port_ticker_select = st.selectbox(
+            "Search Emiten",
+            options=all_tickers,
+            key="port_add_select",
+            help="Select ticker to add to portfolio."
+        )
+    with col_p2:
+        buy_price_input = st.number_input(
+            "Buy Price (IDR)",
+            min_value=1.0,
+            value=100.0,
+            step=10.0,
+            key="port_buy_price"
+        )
+    with col_p3:
+        lots_input = st.number_input(
+            "Lots Size",
+            min_value=1,
+            value=10,
+            step=1,
+            key="port_lots"
+        )
+    with col_p4:
+        st.write("") # Spacer
+        st.write("") # Spacer
+        if st.button("➕ Add Asset", use_container_width=True):
+            # Check if asset already in portfolio to overwrite/merge or append
+            found = False
+            for asset in st.session_state.portfolio:
+                if asset["Ticker"] == port_ticker_select:
+                    # Update/Overwrite or merge
+                    asset["Buy Price"] = buy_price_input
+                    asset["Lots"] = lots_input
+                    found = True
+                    break
+            if not found:
+                st.session_state.portfolio.append({
+                    "Ticker": port_ticker_select,
+                    "Buy Price": buy_price_input,
+                    "Lots": lots_input
+                })
+            st.toast(f"Added {port_ticker_select} to portfolio!")
+            st.rerun()
+
+    # Portfolio table & computations
+    if st.session_state.portfolio:
+        port_rows = []
+        total_invested = 0.0
+        total_current_val = 0.0
+        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
+        
+        for asset in st.session_state.portfolio:
+            ticker = asset["Ticker"]
+            buy_price = asset["Buy Price"]
+            lots = asset["Lots"]
+            
+            # Fetch live price
+            live_price = buy_price
+            if ticker in hist_lookup:
+                hist_row = hist_lookup[ticker]
+                if ticker in st.session_state.screener_data:
+                    live_price = st.session_state.screener_data[ticker]["last"]
+                else:
+                    live_price = safe_float(hist_row.get("Price"), buy_price)
+            
+            invested_val = buy_price * lots * 100
+            current_val = live_price * lots * 100
+            gain_loss = current_val - invested_val
+            gain_loss_pct = (live_price - buy_price) / buy_price * 100 if buy_price > 0 else 0.0
+            
+            total_invested += invested_val
+            total_current_val += current_val
+            
+            port_rows.append({
+                "Ticker": ticker,
+                "Buy Price": buy_price,
+                "Lots": lots,
+                "Live Price": live_price,
+                "Invested Value": invested_val,
+                "Current Value": current_val,
+                "Gain / Loss": gain_loss,
+                "Gain / Loss %": gain_loss_pct
+            })
+            
+        total_gain_loss = total_current_val - total_invested
+        total_gain_loss_pct = total_gain_loss / total_invested * 100 if total_invested > 0 else 0.0
+        
+        # Summary widgets
+        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1.metric("Total Invested", f"Rp {total_invested:,.0f}")
+        col_s2.metric("Total Value", f"Rp {total_current_val:,.0f}")
+        
+        # Color coding metrics for gain loss
+        gl_label = f"Rp {total_gain_loss:+,.0f}"
+        gl_pct_label = f"{total_gain_loss_pct:+.2f}%"
+        col_s3.metric("Total Profit/Loss", gl_label, gl_pct_label)
+        
+        st.markdown("---")
+        
+        # Dataframe
+        port_df = pd.DataFrame(port_rows)
+        st.dataframe(
+            port_df,
+            column_config={
+                "Buy Price": st.column_config.NumberColumn("Avg Buy Price", format="IDR %d"),
+                "Lots": st.column_config.NumberColumn("Lots", format="%d"),
+                "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
+                "Invested Value": st.column_config.NumberColumn("Invested Val", format="Rp %d"),
+                "Current Value": st.column_config.NumberColumn("Current Val", format="Rp %d"),
+                "Gain / Loss": st.column_config.NumberColumn("Profit / Loss", format="Rp %+d"),
+                "Gain / Loss %": st.column_config.NumberColumn("P/L %", format="%+.2f%%"),
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Portfolio Asset management
+        col_prem1, col_prem2, col_prem3 = st.columns([2, 1, 1])
+        with col_prem1:
+            rem_asset_select = st.selectbox(
+                "Select Asset to Remove",
+                options=[a["Ticker"] for a in st.session_state.portfolio],
+                key="port_rem_select"
+            )
+        with col_prem2:
+            st.write("")
+            st.write("")
+            if st.button("❌ Remove Asset", use_container_width=True):
+                # find and remove
+                st.session_state.portfolio = [a for a in st.session_state.portfolio if a["Ticker"] != rem_asset_select]
+                st.toast(f"Removed {rem_asset_select} from portfolio.")
+                st.rerun()
+        with col_prem3:
+            st.write("")
+            st.write("")
+            if st.button("🗑️ Reset Portfolio", use_container_width=True):
+                st.session_state.portfolio = []
+                st.toast("Portfolio cleared.")
+                st.rerun()
+    else:
+        st.info("Portfolio is empty. Add assets using the fields above.")
 
 # ============================================================================
 # TAB 1: DISPLAYING TICKERS
@@ -1439,137 +1768,152 @@ with tab4:
     with st.spinner("⚡ Fetching live trending list from Stockbit API..."):
         trending_api_list = asyncio.run(fetch_stockbit_trending())
         
+    # Create a ranking lookup map from the Stockbit API response (if available)
+    trending_rank_map = {}
     if trending_api_list:
-        # Create a ranking lookup map from the Stockbit API response
         trending_rank_map = {item.get("symbol", "").upper().strip(): idx + 1 for idx, item in enumerate(trending_api_list)}
         
-        matched_trending = []
-        target_df = ticker_df if exclude_filters_trending else filtered_df
-        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in target_df.iterrows()}
-        
-        for ticker, rank_idx in trending_rank_map.items():
-            if ticker in hist_lookup:
-                hist_row = hist_lookup[ticker]
-                
-                # Retrieve from screener_data if loaded, otherwise pull fallback values from row
-                if ticker in st.session_state.screener_data:
-                    raw_data = st.session_state.screener_data[ticker]
-                else:
-                    raw_data = {
-                        "last": safe_float(hist_row.get("Price")),
-                        "open": safe_float(hist_row.get("PriceOpen")),
-                        "high": safe_float(hist_row.get("High")),
-                        "low": safe_float(hist_row.get("Low")),
-                        "volume": safe_float(hist_row.get("Volume")),
-                        "prev_close": safe_float(hist_row.get("ClosePrev")),
-                        "frequency": safe_float(hist_row.get("Frequency", 0)),
-                        "value": safe_float(hist_row.get("Value", 0)),
-                        "foreign_buy": 0.0,
-                        "foreign_sell": 0.0
-                    }
-                
-                # Fetch live values
-                current_price = raw_data["last"]
-                prev_close = safe_float(hist_row.get("ClosePrev", 0))
-                if prev_close <= 0:
-                    prev_close = current_price
-                    
-                open_price = safe_float(raw_data.get("open", current_price))
-                if open_price <= 0:
-                    open_price = prev_close
-                    
-                high = safe_float(raw_data.get("high", current_price))
-                low = safe_float(raw_data.get("low", current_price))
-                volume = safe_float(raw_data.get("volume", 0))
-                avg_vol20 = safe_float(hist_row.get("Vol_Avg", 1))
-                if avg_vol20 <= 0:
-                    avg_vol20 = 1.0
-
-                # 1. Price Change % (Intraday vs Open)
-                change_pct = ((current_price - open_price) / open_price * 100) if open_price > 0 else 0.0
-                
-                # 2. Relative Volume
-                rvol = volume / avg_vol20
-                
-                # 3. Position in Daily Range (0-1)
-                range_position = (
-                    (current_price - low) / (high - low)
-                    if high != low else 0.0
-                )
-                
-                # 4. Approx VWAP (using Typical Price approximation)
-                typical_price = (high + low + current_price) / 3
-                # For single timeframe fallback, typical price serves as a direct proxy for VWAP
-                vwap = typical_price
-                
-                # 5. Transaction Value
-                value = current_price * volume * 100 # assuming lot multiplier
-                
-                # 6. Breakout Conditions
-                breakout_high = current_price >= (high * 0.995)
-                above_vwap = current_price > vwap
-                
-                # Momentum Score (out of 5)
-                momentum_score = 0
-                if change_pct > 3.0:
-                    momentum_score += 1
-                if rvol > 2.0:
-                    momentum_score += 1
-                if above_vwap:
-                    momentum_score += 1
-                if range_position > 0.8:
-                    momentum_score += 1
-                if breakout_high:
-                    momentum_score += 1
-                    
-                # Interpretation labels
-                if momentum_score == 5:
-                    trend_status = "Very Strong 🔥"
-                elif momentum_score == 4:
-                    trend_status = "Strong Candidate ⚡"
-                elif momentum_score == 3:
-                    trend_status = "Watchlist 👁️"
-                else:
-                    trend_status = "Ignore"
-                
-                matched_trending.append({
-                    "Stockbit Rank": trending_rank_map[ticker],
-                    "Ticker": ticker,
-                    "Company Name": hist_row.get("Company Name", ""),
-                    "Price": current_price,
-                    "Change %": change_pct,
-                    "RVol": rvol,
-                    "Range Position": range_position,
-                    "Above VWAP": "✅" if above_vwap else "❌",
-                    "Near High": "✅" if breakout_high else "❌",
-                    "Value (IDR)": value,
-                    "Momentum Score": f"{momentum_score}/5",
-                    "Trend Status": trend_status,
-                    "score_int": momentum_score
-                })
-                
-        if matched_trending:
-            # Sort by Stockbit API ranking order
-            matched_df = pd.DataFrame(matched_trending).sort_values(by="Stockbit Rank")
-            st.dataframe(
-                matched_df,
-                column_config={
-                    "Stockbit Rank": st.column_config.NumberColumn("Stockbit Rank", format="%d"),
-                    "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
-                    "Change %": st.column_config.NumberColumn("Change % (Open)", format="%+.2f%%"),
-                    "RVol": st.column_config.NumberColumn("RVol", format="%.2f x"),
-                    "Range Position": st.column_config.NumberColumn("Range Pos", format="%.2f"),
-                    "Value (IDR)": st.column_config.NumberColumn("Value Today", format="Rp %d"),
-                    "Momentum Score": st.column_config.TextColumn("Score"),
-                    "Trend Status": st.column_config.TextColumn("Status Summary"),
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("None of the active database tickers are currently in the Stockbit live trending list. Try expanding your Watchlist filter settings in the sidebar.")
+    target_df = ticker_df if exclude_filters_trending else filtered_df
+    hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in target_df.iterrows()}
+    
+    # Determine tickers to process
+    if trending_rank_map:
+        tickers_to_process = [(ticker, rank_idx) for ticker, rank_idx in trending_rank_map.items() if ticker in hist_lookup]
     else:
-        st.info("Refresh the live feed to match and display trending signals from the All Tickers database.")
+        st.info("Stockbit live trending API is unreachable. Displaying self-calculated Trending Stocks based on Momentum Score.")
+        # Process all tickers from database
+        tickers_to_process = [(ticker, 999) for ticker in hist_lookup.keys()]
+
+    matched_trending = []
+    
+    for ticker, rank_idx in tickers_to_process:
+        hist_row = hist_lookup[ticker]
+        
+        # Retrieve from screener_data if loaded, otherwise pull fallback values from row
+        if ticker in st.session_state.screener_data:
+            raw_data = st.session_state.screener_data[ticker]
+        else:
+            raw_data = {
+                "last": safe_float(hist_row.get("Price")),
+                "open": safe_float(hist_row.get("PriceOpen")),
+                "high": safe_float(hist_row.get("High")),
+                "low": safe_float(hist_row.get("Low")),
+                "volume": safe_float(hist_row.get("Volume")),
+                "prev_close": safe_float(hist_row.get("ClosePrev")),
+                "frequency": safe_float(hist_row.get("Frequency", 0)),
+                "value": safe_float(hist_row.get("Value", 0)),
+                "foreign_buy": 0.0,
+                "foreign_sell": 0.0
+            }
+        
+        # Fetch live values
+        current_price = raw_data["last"]
+        prev_close = safe_float(hist_row.get("ClosePrev", 0))
+        if prev_close <= 0:
+            prev_close = current_price
+            
+        open_price = safe_float(raw_data.get("open", current_price))
+        if open_price <= 0:
+            open_price = prev_close
+            
+        high = safe_float(raw_data.get("high", current_price))
+        low = safe_float(raw_data.get("low", current_price))
+        volume = safe_float(raw_data.get("volume", 0))
+        avg_vol20 = safe_float(hist_row.get("Vol_Avg", 1))
+        if avg_vol20 <= 0:
+            avg_vol20 = 1.0
+
+        # 1. Price Change % (Intraday vs Open)
+        change_pct = ((current_price - open_price) / open_price * 100) if open_price > 0 else 0.0
+        
+        # 2. Relative Volume
+        rvol = volume / avg_vol20
+        
+        # 3. Position in Daily Range (0-1)
+        range_position = (
+            (current_price - low) / (high - low)
+            if high != low else 0.0
+        )
+        
+        # 4. Approx VWAP (using Typical Price approximation)
+        typical_price = (high + low + current_price) / 3
+        vwap = typical_price
+        
+        # 5. Transaction Value
+        value = current_price * volume * 100 # assuming lot multiplier
+        
+        # 6. Breakout Conditions
+        breakout_high = current_price >= (high * 0.995)
+        above_vwap = current_price > vwap
+        
+        # Momentum Score (out of 5)
+        momentum_score = 0
+        if change_pct > 3.0:
+            momentum_score += 1
+        if rvol > 2.0:
+            momentum_score += 1
+        if above_vwap:
+            momentum_score += 1
+        if range_position > 0.8:
+            momentum_score += 1
+        if breakout_high:
+            momentum_score += 1
+            
+        # Interpretation labels
+        if momentum_score == 5:
+            trend_status = "Very Strong 🔥"
+        elif momentum_score == 4:
+            trend_status = "Strong Candidate ⚡"
+        elif momentum_score == 3:
+            trend_status = "Watchlist 👁️"
+        else:
+            trend_status = "Ignore"
+        
+        matched_trending.append({
+            "Stockbit Rank": rank_idx,
+            "Ticker": ticker,
+            "Company Name": hist_row.get("Company Name", ""),
+            "Price": current_price,
+            "Change %": change_pct,
+            "RVol": rvol,
+            "Range Position": range_position,
+            "Above VWAP": "✅" if above_vwap else "❌",
+            "Near High": "✅" if breakout_high else "❌",
+            "Value (IDR)": value,
+            "Momentum Score": f"{momentum_score}/5",
+            "Trend Status": trend_status,
+            "score_int": momentum_score
+        })
+        
+    if matched_trending:
+        matched_df = pd.DataFrame(matched_trending)
+        if trending_rank_map:
+            matched_df = matched_df.sort_values(by="Stockbit Rank")
+            cols_to_show = ["Stockbit Rank", "Ticker", "Company Name", "Price", "Change %", "RVol", "Range Position", "Above VWAP", "Near High", "Value (IDR)", "Momentum Score", "Trend Status"]
+        else:
+            # Sort by Momentum Score descending, then Change % descending
+            matched_df = matched_df.sort_values(by=["score_int", "Change %"], ascending=[False, False])
+            # Filter out "Ignore" status so we don't pollute list with dead stocks
+            matched_df = matched_df[matched_df["Trend Status"] != "Ignore"]
+            cols_to_show = ["Ticker", "Company Name", "Price", "Change %", "RVol", "Range Position", "Above VWAP", "Near High", "Value (IDR)", "Momentum Score", "Trend Status"]
+            
+        st.dataframe(
+            matched_df[cols_to_show],
+            column_config={
+                "Stockbit Rank": st.column_config.NumberColumn("Stockbit Rank", format="%d"),
+                "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
+                "Change %": st.column_config.NumberColumn("Change % (Open)", format="%+.2f%%"),
+                "RVol": st.column_config.NumberColumn("RVol", format="%.2f x"),
+                "Range Position": st.column_config.NumberColumn("Range Pos", format="%.2f"),
+                "Value (IDR)": st.column_config.NumberColumn("Value Today", format="Rp %d"),
+                "Momentum Score": st.column_config.TextColumn("Score"),
+                "Trend Status": st.column_config.TextColumn("Status Summary"),
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("None of the active database tickers match trending signals. Try expanding your Watchlist filter settings in the sidebar.")
 
 # ============================================================================
 # TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
