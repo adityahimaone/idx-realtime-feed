@@ -609,6 +609,27 @@ async def fetch_stockbit_detail(ticker: str):
         await provider.close()
         return None
 
+async def fetch_stockbit_trending():
+    """Fetch live trending stocks list from unofficial Stockbit Exodus API."""
+    token = await auth_service.get_token()
+    if not token:
+        return []
+    url = "https://exodus.stockbit.com/trending/stocks"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Referer": "https://stockbit.com/",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    }
+    try:
+        r = await asyncio.to_thread(
+            requests_cf.get, url, headers=headers, timeout=15, impersonate="chrome"
+        )
+        if r.status_code == 200:
+            return r.json().get("data", [])
+    except Exception as e:
+        logger.error(f"Exodus API trending fetch failed: {e}")
+    return []
+
 # ============================================================================
 # SCORING & RECOMMENDATIONS ENGINE
 # ============================================================================
@@ -1380,159 +1401,64 @@ with tab3:
         st.info("Refresh the feed to display general screener results.")
 
 # ============================================================================
-# TAB 4: TRENDING STOCKS
-# ============================================================================
-with tab4:
-    st.markdown("### 🔥 Trending Stocks Board")
-    st.caption("Identify stocks showing strong momentum, liquidity, and volume surges.")
+# TAB 4: TRENDwith tab4:
+    st.markdown("### 🔥 Live Trending Stocks (Exodus API)")
+    st.caption("Real-time list of most discussed and active stocks fetched directly from the unofficial Stockbit Exodus API.")
     
-    if scored_list:
-        trending_data = []
-        for s in scored_list:
-            hist_row = s["hist_row_obj"]
-            raw_data = s["raw_data_obj"]
+    with st.spinner("⚡ Fetching trending stocks from Stockbit..."):
+        trending_list = asyncio.run(fetch_stockbit_trending())
+        
+    if trending_list:
+        parsed_trending = []
+        for idx, item in enumerate(trending_list):
+            symbol = item.get("symbol", "").upper().strip()
+            name = item.get("name", "")
+            last_price = safe_float(item.get("last"))
+            previous = safe_float(item.get("previous"))
+            percent_str = item.get("percent", "0.0")
+            percent_val = safe_float(percent_str)
+            change_str = item.get("change", "0")
+            change_val = safe_float(change_str)
             
-            # Extract live values
-            last = s["Live Price"]
-            prev_close = safe_float(hist_row.get("ClosePrev", 0))
-            if prev_close <= 0:
-                prev_close = last
+            # Format notation warning indicators
+            notation_list = item.get("notation", [])
+            notation_codes = [n.get("notation_code", "") for n in notation_list if n.get("notation_code")]
+            notation_str = ", ".join(notation_codes) if notation_codes else "-"
             
-            vol_today = safe_float(raw_data.get("volume", 0))
-            vol_avg20d = safe_float(hist_row.get("Vol_Avg", 0))
+            uma_status = "⚠️ UMA" if item.get("uma", False) else "Normal"
+            corp_active = "Yes" if item.get("corp_action", {}).get("active", False) else "No"
             
-            freq_today = safe_float(raw_data.get("frequency", 0))
-            # Assume 1000 tx as a sensible default average frequency if not found
-            freq_avg20d = safe_float(hist_row.get("Freq_Avg", 1000))
-            if freq_avg20d <= 0:
-                freq_avg20d = 1000
-                
-            val_today = safe_float(raw_data.get("value", 0))
-            val_avg20d = safe_float(hist_row.get("Val_Avg", 100000000))
-            if val_avg20d <= 0:
-                val_avg20d = 100000000
-                
-            f_buy = safe_float(raw_data.get("foreign_buy", 0))
-            f_sell = safe_float(raw_data.get("foreign_sell", 0))
-            net_foreign = f_buy - f_sell
-
-            # 1. Pre-filter validation
-            vsr = vol_today / vol_avg20d if vol_avg20d > 0 else 1.0
-            price_change = ((last - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
-            
-            # Threshold pre-filters
-            if vsr < 2.0:
-                continue
-            if abs(price_change) < 0.5:
-                continue
-            if freq_today < 200:
-                continue
-            if val_today < 100000000: # Rp 100 juta in Rupiah
-                continue
-
-            # 2. Score calculations
-            # ① Volume Surge Ratio (35%)
-            if vsr >= 5.0:
-                score_vsr = 100
-            elif vsr >= 2.0:
-                score_vsr = 70
-            else:
-                score_vsr = 40
-                
-            # ② Frequency Surge (25%)
-            fsr = freq_today / freq_avg20d
-            if fsr >= 3.0:
-                score_fsr = 100
-            elif fsr >= 1.5:
-                score_fsr = 75
-            elif fsr >= 1.0:
-                score_fsr = 50
-            else:
-                score_fsr = 20
-                
-            # ③ Price Change % (20%)
-            if abs(price_change) >= 5.0:
-                score_prc = 100
-            elif abs(price_change) >= 2.0:
-                score_prc = 80
-            elif abs(price_change) >= 0.5:
-                score_prc = 60
-            else:
-                score_prc = 30
-                
-            # ④ Value Surge (15%)
-            val_ratio = val_today / val_avg20d
-            if val_ratio >= 3.0:
-                score_val = 100
-            elif val_ratio >= 1.5:
-                score_val = 75
-            elif val_ratio >= 1.0:
-                score_val = 50
-            else:
-                score_val = 20
-                
-            # ⑤ Net Foreign Direction (10%)
-            score_foreign = 100 if net_foreign > 0 else (50 if net_foreign == 0 else 20)
-
-            # Combined weighted score
-            total_trend_score = int(round(
-                score_vsr * 0.35 +
-                score_fsr * 0.25 +
-                score_prc * 0.20 +
-                score_val * 0.15 +
-                score_foreign * 0.10
-            ))
-            
-            # VSR Interpretation
-            if vsr > 10.0:
-                vsr_label, vsr_col = "Extreme ⚠", "#FF6B6B"
-            elif vsr >= 5.0:
-                vsr_label, vsr_col = "Trending 🔥", "#FFA500"
-            elif vsr >= 2.0:
-                vsr_label, vsr_col = "Radar ⚡", "#FFFF00"
-            else:
-                vsr_label, vsr_col = "Normal", "#94A3B8"
-
-            trending_data.append({
-                "Ticker": s["Ticker"],
-                "Company Name": s["Company Name"],
-                "Sector": s["Sector"],
-                "Live Price": last,
-                "Price Change %": price_change,
-                "VSR": vsr,
-                "VSR Status": vsr_label,
-                "vsr_color": vsr_col,
-                "Freq Surge": fsr,
-                "Value Today": val_today,
-                "Net Foreign (Lot)": net_foreign,
-                "Trend Score": total_trend_score
+            parsed_trending.append({
+                "Rank": idx + 1,
+                "Ticker": symbol,
+                "Company Name": name,
+                "Live Price": last_price,
+                "Prev Close": previous,
+                "Change": change_val,
+                "Change %": percent_val,
+                "Corporate Action": corp_active,
+                "UMA": uma_status,
+                "Notations": notation_str
             })
             
-        if trending_data:
-            trend_df = pd.DataFrame(trending_data).sort_values(by="Trend Score", ascending=False)
-            st.dataframe(
-                trend_df,
-                column_config={
-                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                    "Price Change %": st.column_config.NumberColumn("Price Change %", format="%+.2f%%"),
-                    "VSR": st.column_config.NumberColumn("VSR", format="%.2f x"),
-                    "Freq Surge": st.column_config.NumberColumn("Freq Surge", format="%.2f x"),
-                    "Value Today": st.column_config.NumberColumn("Value (IDR)", format="Rp %d"),
-                    "Net Foreign (Lot)": st.column_config.NumberColumn("Net Foreign (Lot)", format="%+d"),
-                    "Trend Score": st.column_config.ProgressColumn(
-                        "Trend Score",
-                        min_value=0,
-                        max_value=100,
-                        format="%d"
-                    )
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("No tickers currently pass the minimum trending filters (VSR >= 2x, |ΔP%| >= 0.5%, Freq >= 200 tx, Val >= Rp 100M).")
+        st.dataframe(
+            pd.DataFrame(parsed_trending),
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "Ticker": st.column_config.TextColumn("Ticker"),
+                "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
+                "Prev Close": st.column_config.NumberColumn("Prev Close", format="IDR %d"),
+                "Change": st.column_config.NumberColumn("Change", format="%+d"),
+                "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                "Corporate Action": st.column_config.TextColumn("Corp Action"),
+                "UMA": st.column_config.TextColumn("UMA Status"),
+                "Notations": st.column_config.TextColumn("Notations"),
+            },
+            use_container_width=True,
+            hide_index=True
+        )
     else:
-        st.info("Refresh the live feed to calculate trending stock signals.")
+        st.warning("Could not retrieve live trending list from Exodus API. Verify token credentials or try again later.")
 
 # ============================================================================
 # TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
