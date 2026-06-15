@@ -1400,65 +1400,101 @@ with tab3:
     else:
         st.info("Refresh the feed to display general screener results.")
 
-# ============================================================================
-# TAB 4: TRENDwith tab4:
-    st.markdown("### 🔥 Live Trending Stocks (Exodus API)")
-    st.caption("Real-time list of most discussed and active stocks fetched directly from the unofficial Stockbit Exodus API.")
+with tab4:
+    st.markdown("### 🔥 Trending Stocks Board (All Tickers & Stockbit Match)")
+    st.caption("Cross-references the All Tickers database with the live Stockbit Exodus Trending API list, displaying complete indicator breakdowns.")
     
-    with st.spinner("⚡ Fetching trending stocks from Stockbit..."):
-        trending_list = asyncio.run(fetch_stockbit_trending())
+    with st.spinner("⚡ Fetching live trending list from Stockbit API..."):
+        trending_api_list = asyncio.run(fetch_stockbit_trending())
         
-    if trending_list:
-        parsed_trending = []
-        for idx, item in enumerate(trending_list):
-            symbol = item.get("symbol", "").upper().strip()
-            name = item.get("name", "")
-            last_price = safe_float(item.get("last"))
-            previous = safe_float(item.get("previous"))
-            percent_str = item.get("percent", "0.0")
-            percent_val = safe_float(percent_str)
-            change_str = item.get("change", "0")
-            change_val = safe_float(change_str)
-            
-            # Format notation warning indicators
-            notation_list = item.get("notation", [])
-            notation_codes = [n.get("notation_code", "") for n in notation_list if n.get("notation_code")]
-            notation_str = ", ".join(notation_codes) if notation_codes else "-"
-            
-            uma_status = "⚠️ UMA" if item.get("uma", False) else "Normal"
-            corp_active = "Yes" if item.get("corp_action", {}).get("active", False) else "No"
-            
-            parsed_trending.append({
-                "Rank": idx + 1,
-                "Ticker": symbol,
-                "Company Name": name,
-                "Live Price": last_price,
-                "Prev Close": previous,
-                "Change": change_val,
-                "Change %": percent_val,
-                "Corporate Action": corp_active,
-                "UMA": uma_status,
-                "Notations": notation_str
-            })
-            
-        st.dataframe(
-            pd.DataFrame(parsed_trending),
-            column_config={
-                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-                "Ticker": st.column_config.TextColumn("Ticker"),
-                "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                "Prev Close": st.column_config.NumberColumn("Prev Close", format="IDR %d"),
-                "Change": st.column_config.NumberColumn("Change", format="%+d"),
-                "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
-                "Corporate Action": st.column_config.TextColumn("Corp Action"),
-                "UMA": st.column_config.TextColumn("UMA Status"),
-                "Notations": st.column_config.TextColumn("Notations"),
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+    if trending_api_list and scored_list:
+        # Create a ranking lookup map from the Stockbit API response
+        trending_rank_map = {item.get("symbol", "").upper().strip(): idx + 1 for idx, item in enumerate(trending_api_list)}
+        
+        matched_trending = []
+        for s in scored_list:
+            ticker = s["Ticker"]
+            if ticker in trending_rank_map:
+                hist_row = s["hist_row_obj"]
+                raw_data = s["raw_data_obj"]
+                
+                # Fetch live values
+                last = s["Live Price"]
+                prev_close = safe_float(hist_row.get("ClosePrev", 0))
+                if prev_close <= 0:
+                    prev_close = last
+                
+                vol_today = safe_float(raw_data.get("volume", 0))
+                vol_avg20d = safe_float(hist_row.get("Vol_Avg", 0))
+                
+                freq_today = safe_float(raw_data.get("frequency", 0))
+                freq_avg20d = safe_float(hist_row.get("Freq_Avg", 1000))
+                if freq_avg20d <= 0:
+                    freq_avg20d = 1000
+                    
+                val_today = safe_float(raw_data.get("value", 0))
+                val_avg20d = safe_float(hist_row.get("Val_Avg", 100000000))
+                
+                f_buy = safe_float(raw_data.get("foreign_buy", 0))
+                f_sell = safe_float(raw_data.get("foreign_sell", 0))
+                net_foreign = f_buy - f_sell
+                
+                vsr = vol_today / vol_avg20d if vol_avg20d > 0 else 1.0
+                price_change = ((last - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+                fsr = freq_today / freq_avg20d
+                
+                # VSR Status Interpretation
+                if vsr > 10.0:
+                    vsr_label = "Extreme ⚠"
+                elif vsr >= 5.0:
+                    vsr_label = "Trending 🔥"
+                elif vsr >= 2.0:
+                    vsr_label = "Radar ⚡"
+                else:
+                    vsr_label = "Normal"
+                    
+                matched_trending.append({
+                    "Stockbit Rank": trending_rank_map[ticker],
+                    "Ticker": ticker,
+                    "Company Name": s["Company Name"],
+                    "Live Price": last,
+                    "Change %": price_change,
+                    "VSR": vsr,
+                    "VSR Status": vsr_label,
+                    "Freq Surge": fsr,
+                    "Value Today": val_today,
+                    "Net Foreign (Lot)": net_foreign,
+                    "Intraday Score": s["Intraday Score"],
+                    "Live Signal": s["Live Signal"]
+                })
+                
+        if matched_trending:
+            # Sort by Stockbit API ranking order
+            matched_df = pd.DataFrame(matched_trending).sort_values(by="Stockbit Rank")
+            st.dataframe(
+                matched_df,
+                column_config={
+                    "Stockbit Rank": st.column_config.NumberColumn("Stockbit Rank", format="%d"),
+                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
+                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                    "VSR": st.column_config.NumberColumn("VSR", format="%.2f x"),
+                    "Freq Surge": st.column_config.NumberColumn("Freq Surge", format="%.2f x"),
+                    "Value Today": st.column_config.NumberColumn("Value (IDR)", format="Rp %d"),
+                    "Net Foreign (Lot)": st.column_config.NumberColumn("Net Foreign (Lot)", format="%+d"),
+                    "Intraday Score": st.column_config.ProgressColumn(
+                        "Intraday Score",
+                        min_value=0,
+                        max_value=100,
+                        format="%d"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("None of the active database tickers are currently in the Stockbit live trending list. Try expanding your Watchlist filter settings in the sidebar.")
     else:
-        st.warning("Could not retrieve live trending list from Exodus API. Verify token credentials or try again later.")
+        st.info("Refresh the live feed to match and display trending signals from the All Tickers database.")
 
 # ============================================================================
 # TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
