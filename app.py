@@ -1006,16 +1006,12 @@ with st.sidebar:
             # Rerun trigger
             st.session_state["trigger_auto_scan"] = True
         else:
-            # Display a dynamic HTML container that updates the countdown in real time via local JS
-            countdown_placeholder = st.empty()
-            countdown_placeholder.markdown(
-                f'<div style="background-color: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px; border-radius: 6px; color: #38BDF8; font-weight: bold; font-size: 0.9em; margin-bottom: 10px;">⏳ Next auto-scan in: <span id="countdown_timer_span">{time_left // 60}m {time_left % 60}s</span></div>',
-                unsafe_allow_html=True
-            )
-            
-            st.components.v1.html(
-                f"""
-                <script>
+            countdown_html = f"""
+            <div style="background-color: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px; border-radius: 6px; color: #38BDF8; font-weight: bold; font-size: 0.9em; margin-bottom: 10px;">
+                ⏳ Next auto-scan in: <span id="countdown_timer_span">{time_left // 60}m {time_left % 60}s</span>
+            </div>
+            <script>
+            (function() {{
                 var targetTime = {st.session_state.next_refresh_time * 1000};
                 var refreshInterval = {refresh_interval};
                 
@@ -1026,27 +1022,29 @@ with st.sidebar:
                     var minutes = Math.floor(diff / 60);
                     var seconds = diff % 60;
                     
-                    // Update text inside parent frame DOM securely
-                    var span = window.parent.document.getElementById("countdown_timer_span");
+                    var span = document.getElementById("countdown_timer_span") || window.parent.document.getElementById("countdown_timer_span");
                     if (span) {{
                         span.innerText = minutes + "m " + seconds + "s";
                     }}
                     
                     if (diff <= 0) {{
                         clearInterval(interval);
-                        // Trigger reload with query parameters to preserve state and run scan
-                        window.parent.location.href = window.parent.location.pathname + "?auto_refresh=true&auto_scan=true&refresh_interval=" + refreshInterval;
+                        var loc = window.location;
+                        try {{
+                            if (window.parent && window.parent.location) {{
+                                loc = window.parent.location;
+                            }}
+                        }} catch(e) {{}}
+                        loc.href = loc.pathname + "?auto_refresh=true&auto_scan=true&refresh_interval=" + refreshInterval;
                     }}
                 }}
                 
-                // Immediately check once and set interval for subsequent updates
                 updateTimer();
                 var interval = setInterval(updateTimer, 1000);
-                </script>
-                """,
-                height=0,
-                width=0
-            )
+            }})();
+            </script>
+            """
+            st.markdown(countdown_html, unsafe_allow_html=True)
     else:
         if st.query_params.get("auto_refresh") == "true":
             st.query_params["auto_refresh"] = "false"
