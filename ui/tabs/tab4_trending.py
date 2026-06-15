@@ -19,7 +19,7 @@ def render_tab4(ticker_df, scored_list):
         hist_row = s["hist_row_obj"]
         
         # Formula inputs
-        vsr = safe_float(data.get("volume", 0)) / safe_float(hist_row.get("Vol_Avg", 1))
+        vsr = safe_float(data.get("volume", 0)) / max(safe_float(hist_row.get("Vol_Avg", 1)), 1.0)
         freq_today = safe_float(data.get("frequency", 0))
         freq_avg = safe_float(hist_row.get("Freq_Avg", 1))
         freq_surge = (freq_today / freq_avg) if freq_avg > 0 else 0
