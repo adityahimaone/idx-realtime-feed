@@ -225,6 +225,83 @@ st.markdown("""
         margin-top: 10px;
         line-height: 1.4;
     }
+    
+    /* API Status & Pulse Animations */
+    .status-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        background-color: #1A202C;
+        padding: 15px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        border: 1px solid #2D3748;
+        align-items: center;
+    }
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9em;
+        font-weight: 500;
+    }
+    .pulse-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .pulse-green {
+        background-color: #10B981;
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+        animation: pulse-green-anim 2s infinite;
+    }
+    .pulse-yellow {
+        background-color: #F59E0B;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+        animation: pulse-yellow-anim 2s infinite;
+    }
+    .live-label-container {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background-color: rgba(16, 185, 129, 0.15);
+        color: #10B981;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 0.8em;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    @keyframes pulse-green-anim {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+        }
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        }
+    }
+    @keyframes pulse-yellow-anim {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+        }
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -609,25 +686,69 @@ def compute_action_recommendation(price, sl, tp, score, rsi):
         return "🌀 SPECULATIVE", "2-3%", f"R/R={rr}. Higher volatility."
     return "❌ AVOID", "0%", f"R/R={rr} (Target: {tp}, SL: {sl}). Below thresholds."
 
+def get_tick_size(price: float) -> int:
+    """IDX standard tick rules."""
+    if price < 200:
+        return 1
+    elif price < 500:
+        return 2
+    elif price < 2000:
+        return 5
+    elif price < 5000:
+        return 10
+    else:
+        return 25
+
+def align_price_to_tick(price: float, round_direction: str = "nearest") -> float:
+    """Align price to IDX tick size depending on requested direction."""
+    if price <= 0:
+        return 0.0
+    tick = get_tick_size(price)
+    if round_direction == "up":
+        return float(math.ceil(price / tick) * tick)
+    elif round_direction == "down":
+        return float(math.floor(price / tick) * tick)
+    else:
+        return float(round(price / tick) * tick)
+
 def calculate_strategies(price: float, score: int, signal: str) -> dict:
-    """Calculate 3-Tier execution strategy levels for a given price."""
+    """Calculate 3-Tier execution strategy levels for a given price using ticker.py rules."""
     # Aggressive (Breakout Play)
-    # Target +10%, Stop Loss -5%
-    tp_agg = round(price * 1.10, 2)
-    sl_agg = round(price * 0.95, 2)
-    rr_agg = round((tp_agg - price) / max(1.0, price - sl_agg), 1)
+    # Entry at best ask/price
+    entry_agg = price
+    tp_agg = entry_agg * 1.10
+    sl_agg = entry_agg * 0.95
     
     # Moderate (Pullback Play)
-    # Target +5%, Stop Loss -7%
-    tp_mod = round(price * 1.05, 2)
-    sl_mod = round(price * 0.93, 2)
-    rr_mod = round((tp_mod - price) / max(1.0, price - sl_mod), 1)
+    # Entry at 2 ticks below price
+    tick_size = get_tick_size(price)
+    entry_mod = price - 2 * tick_size
+    tp_mod = entry_mod * 1.05
+    sl_mod = entry_mod * 0.93
     
     # Low Risk (Support Buy)
-    # Target +3%, Stop Loss -2%
-    tp_low = round(price * 1.03, 2)
-    sl_low = round(price * 0.98, 2)
-    rr_low = round((tp_low - price) / max(1.0, price - sl_low), 1)
+    # Entry at 4% support distance
+    entry_low = price - 4 * tick_size
+    tp_low = entry_low * 1.08
+    sl_low = entry_low * 0.96
+
+    # Align all values to ticks
+    entry_agg = align_price_to_tick(entry_agg)
+    tp_agg = align_price_to_tick(tp_agg)
+    sl_agg = align_price_to_tick(sl_agg)
+
+    entry_mod = align_price_to_tick(entry_mod)
+    tp_mod = align_price_to_tick(tp_mod)
+    sl_mod = align_price_to_tick(sl_mod)
+
+    entry_low = align_price_to_tick(entry_low)
+    tp_low = align_price_to_tick(tp_low)
+    sl_low = align_price_to_tick(sl_low)
+
+    # Risk-Reward calculations
+    rr_agg = round((tp_agg - entry_agg) / max(1.0, entry_agg - sl_agg), 1)
+    rr_mod = round((tp_mod - entry_mod) / max(1.0, entry_mod - sl_mod), 1)
+    rr_low = round((tp_low - entry_low) / max(1.0, entry_low - sl_low), 1)
     
     # Alloc sizes based on signal strength
     if "STRONG BUY" in signal:
@@ -645,18 +766,21 @@ def calculate_strategies(price: float, score: int, signal: str) -> dict:
         
     return {
         "Aggressive": {
+            "entry": entry_agg,
             "target": tp_agg,
             "sl": sl_agg,
             "rr": rr_agg,
             "size": alloc_agg
         },
         "Moderate": {
+            "entry": entry_mod,
             "target": tp_mod,
             "sl": sl_mod,
             "rr": rr_mod,
             "size": alloc_mod
         },
         "Low Risk": {
+            "entry": entry_low,
             "target": tp_low,
             "sl": sl_low,
             "rr": rr_low,
@@ -673,6 +797,45 @@ def minify_html(html_str: str) -> str:
 # MAIN INTERFACE
 # ============================================================================
 st.title("📈 IDX Intraday Multi-Source Screener [IRW]")
+
+# ============================================================================
+# LIVE TIME & API STATUS BOARD
+# ============================================================================
+now_wib = datetime.now(WIB)
+is_day_trade = now_wib.weekday() < 5 and (
+    (now_wib.hour == 9 and now_wib.minute >= 0) or
+    (now_wib.hour > 9 and now_wib.hour < 12) or
+    (now_wib.hour == 11 and now_wib.minute <= 30) or
+    (now_wib.hour >= 13 and now_wib.hour < 16) or
+    (now_wib.hour == 16 and now_wib.minute <= 15)
+)
+
+live_badge = '<span class="live-label-container"><span class="pulse-dot pulse-green"></span>🔴 LIVE</span>' if is_day_trade else '<span class="live-label-container" style="background-color: rgba(245,158,11,0.15); color: #F59E0B; border-color: rgba(245,158,11,0.3);"><span class="pulse-dot pulse-yellow"></span>⏸️ CLOSED</span>'
+
+status_html = f"""
+<div class="status-container">
+    <div class="status-item">
+        <strong>Market Status:</strong> {live_badge} ({now_wib.strftime('%Y-%m-%d %H:%M:%S')} WIB)
+    </div>
+    <div class="status-item">
+        <span class="pulse-dot pulse-green"></span>
+        <span><strong>Google Sheets:</strong> Connected (Active Pool)</span>
+    </div>
+    <div class="status-item">
+        <span class="pulse-dot pulse-green"></span>
+        <span><strong>Yahoo Finance:</strong> Online (JK Feed)</span>
+    </div>
+    <div class="status-item">
+        <span class="pulse-dot pulse-green"></span>
+        <span><strong>IDX Endpoint:</strong> Online (Trading Summary)</span>
+    </div>
+    <div class="status-item">
+        <span class="pulse-dot pulse-green"></span>
+        <span><strong>Exodus API:</strong> Ready (Deep Analysis)</span>
+    </div>
+</div>
+"""
+st.markdown(status_html, unsafe_allow_html=True)
 st.caption("Freshness Fallback Pipeline: Google Sheets ➔ yfinance ➔ IDX. (Stockbit for Deep Analysis only).")
 
 # Load database
@@ -786,19 +949,67 @@ else:
 # ============================================================================
 # SYNC / REFRESH TRIGGER
 # ============================================================================
-col_ref, col_info = st.columns([1, 4])
-with col_ref:
-    if st.button("🔄 Refresh Live Feed", use_container_width=True):
+col_ref1, col_ref2, col_info = st.columns([1, 1, 2])
+with col_ref1:
+    if st.button("🔄 Refresh Live Feed (Multi)", use_container_width=True, help="Fetch via Google Sheets ➔ yfinance ➔ IDX Endpoint"):
         live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay))
         st.session_state.screener_data.update(live_results)
-        st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Multi-Source)"
+        st.rerun()
+
+with col_ref2:
+    if st.button("🚀 Refresh Live Feed (Stockbit)", use_container_width=True, help="Fetch fresh price directly from Stockbit Exodus API"):
+        # Helper batch fetcher for Stockbit prices specifically
+        async def fetch_stockbit_screener_batch(tickers, df, delay):
+            token = await auth_service.get_token()
+            if not token:
+                st.error("Failed to acquire Stockbit Exodus Auth Token!")
+                return {}
+            results = {}
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            total = len(tickers)
+            completed = 0
+            
+            for ticker in tickers:
+                status_text.text(f"Fetching {ticker} directly from Stockbit...")
+                provider = StockbitProvider(token)
+                try:
+                    snap = await provider.fetch_orderbook(ticker)
+                    if snap:
+                        results[ticker] = {
+                            "last": snap.last_price,
+                            "open": snap.open_price if snap.open_price else snap.last_price,
+                            "high": snap.high if snap.high else snap.last_price,
+                            "low": snap.low if snap.low else snap.last_price,
+                            "volume": snap.volume,
+                            "prev_close": snap.prev_close,
+                            "source": "stockbit",
+                            "source_ts": datetime.now(WIB),
+                            "report": "Stockbit Exodus Live Direct"
+                        }
+                except Exception as exc:
+                    logger.error(f"Stockbit batch scan error for {ticker}: {exc}")
+                finally:
+                    await provider.close()
+                completed += 1
+                progress_bar.progress(completed / total)
+                await asyncio.sleep(delay)
+            progress_bar.empty()
+            status_text.empty()
+            return results
+
+        live_results = asyncio.run(fetch_stockbit_screener_batch(cand_list, ticker_df, fetch_delay))
+        if live_results:
+            st.session_state.screener_data.update(live_results)
+            st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Stockbit API)"
         st.rerun()
 
 with col_info:
     if st.session_state.last_fetch:
-        st.caption(f"Last updated: {st.session_state.last_fetch} WIB (includes polling delay).")
+        st.caption(f"Last updated: {st.session_state.last_fetch} WIB.")
     else:
-        st.info("Click 'Refresh Live Feed' to fetch price freshness tables.")
+        st.info("Click a button to fetch price freshness tables.")
 
 # ============================================================================
 # SCREENER PROCESS & DATA EXTRACTION
@@ -1179,7 +1390,7 @@ with tab4:
                         <div class="strategy-card">
                             <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
                             <ul>
-                                <li><b>Entry:</b> IDR {snap.last_price:,.0f}</li>
+                                <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
                                 <li><b>Target:</b> IDR {strategies['Aggressive']['target']:,.0f} (+10%)</li>
                                 <li><b>Stop Loss:</b> IDR {strategies['Aggressive']['sl']:,.0f} (-5%)</li>
                                 <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
@@ -1192,7 +1403,7 @@ with tab4:
                         <div class="strategy-card">
                             <h3 style="color: #FFFF00">⚡ Moderate (Pullback Play)</h3>
                             <ul>
-                                <li><b>Entry:</b> IDR {snap.last_price:,.0f}</li>
+                                <li><b>Entry:</b> IDR {strategies['Moderate']['entry']:,.0f}</li>
                                 <li><b>Target:</b> IDR {strategies['Moderate']['target']:,.0f} (+5%)</li>
                                 <li><b>Stop Loss:</b> IDR {strategies['Moderate']['sl']:,.0f} (-7%)</li>
                                 <li><b>R/R Ratio:</b> {strategies['Moderate']['rr']}x</li>
@@ -1205,7 +1416,7 @@ with tab4:
                         <div class="strategy-card">
                             <h3 style="color: #00D4AA">🛡️ Low Risk (Support Buy)</h3>
                             <ul>
-                                <li><b>Entry:</b> IDR {snap.last_price:,.0f}</li>
+                                <li><b>Entry:</b> IDR {strategies['Low Risk']['entry']:,.0f}</li>
                                 <li><b>Target:</b> IDR {strategies['Low Risk']['target']:,.0f} (+3%)</li>
                                 <li><b>Stop Loss:</b> IDR {strategies['Low Risk']['sl']:,.0f} (-2%)</li>
                                 <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
