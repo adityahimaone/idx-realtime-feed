@@ -1,0 +1,832 @@
+[
+  {
+    "timestamp": "2026-06-12T06:19:42.425322+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:19:44.062347+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:26:01.543311+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:26:03.870465+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:26:59.983225+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:27:01.881632+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:45:34.218164+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:45:36.544157+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:46:31.185288+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:46:32.896078+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:49:04.423746+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 4 mismatch: expected 'High', got 'Total Bid Lot'; Column 5 mismatch: expected 'Low', got 'Total Ask Lot'; Column 6 mismatch: expected 'Open', got 'Imbalance Ratio'; Column 7 mismatch: expected 'Volume', got 'Support'; Column 8 mismatch: expected 'Total Bid Lot', got 'Resistance'; Column 9 mismatch: expected 'Total Ask Lot', got 'Source'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Last Update (UTC)'; Missing column 11: expected 'Support (Max Bid Lot)'; Missing column 12: expected 'Resistance (Max Ask Lot)'; Missing column 13: expected 'Source'; Missing column 14: expected 'Last Update (UTC)'"
+  },
+  {
+    "timestamp": "2026-06-12T06:49:06.943346+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:50:01.050720+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 12 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
+  },
+  {
+    "timestamp": "2026-06-12T06:50:03.160215+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:51:29.507935+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T06:52:26.498226+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T07:24:00.078904+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T07:24:59.251554+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T07:59:09.522776+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:09:05.363273+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:09:07.936122+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:11:12.288287+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:11:14.772091+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:25:23.272430+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:25:27.894265+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:25:30.256348+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:27:06.533663+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:27:08.799533+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:27:12.692047+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:27:14.808720+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:28:52.810889+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:28:55.072525+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:28:58.929479+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:29:01.330124+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:30:38.921288+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:30:41.169753+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:30:45.046911+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:30:47.372240+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:32:34.648021+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:32:36.733357+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:32:40.308940+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:32:42.484404+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T08:35:02.765506+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:36:42.968635+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:38:26.429377+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:38:33.737398+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
+  },
+  {
+    "timestamp": "2026-06-12T08:40:14.795684+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:40:20.469181+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
+  },
+  {
+    "timestamp": "2026-06-12T08:42:04.453162+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:42:11.572860+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:43:54.492587+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:43:59.927546+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
+  },
+  {
+    "timestamp": "2026-06-12T08:45:40.170730+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T08:45:45.244368+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
+  },
+  {
+    "timestamp": "2026-06-12T12:12:38.962356+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T12:12:41.226027+00:00",
+    "event": "WRITE_OK",
+    "details": "3 snapshots, 4 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T12:18:04.596642+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T12:18:08.395589+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T12:19:44.454532+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T12:19:47.213006+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T13:00:48.346888+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T13:00:50.965521+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T13:02:25.367447+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T13:02:28.324343+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T13:42:07.018524+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T13:42:09.515895+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T13:46:55.108181+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T13:46:57.796572+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T13:48:34.648809+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T13:48:37.201990+00:00",
+    "event": "WRITE_OK",
+    "details": "20 snapshots, 21 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:26:23.578431+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:26:26.354616+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:28:17.529191+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:28:20.032752+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:35:50.725239+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:35:53.357134+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:37:47.549168+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:37:51.325281+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:39:45.809065+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:39:48.511111+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:41:40.415171+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:41:44.597380+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:43:48.005060+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:43:50.678120+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T14:45:44.627790+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
+  },
+  {
+    "timestamp": "2026-06-12T14:45:47.266267+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:31:54.189723+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 17 mismatch: expected 'Last Update (UTC)', got 'Last Update (WIB)'"
+  },
+  {
+    "timestamp": "2026-06-12T15:31:55.416891+00:00",
+    "event": "ROLLBACK_BLOCKED",
+    "details": "Sheet timestamp 2026-06-12T22:30:00+00:00 is 25085s ahead of now. Possible manual edit or clock skew. Blocking write."
+  },
+  {
+    "timestamp": "2026-06-12T15:31:56.895854+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:32:01.067795+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:37:41.826395+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:37:45.693918+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:38:35.526890+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T15:38:40.341277+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:22:00.440335+00:00",
+    "event": "ROLLBACK_BLOCKED",
+    "details": "Sheet timestamp 2026-06-12T23:20:00+00:00 is 25080s ahead of now. Possible manual edit or clock skew. Blocking write."
+  },
+  {
+    "timestamp": "2026-06-12T16:22:02.178288+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:25:00.517617+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:25:04.358411+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:25:37.365604+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:25:40.915458+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:26:52.730225+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:26:56.213837+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:28:10.064623+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:28:13.759748+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:29:25.471242+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:29:29.309640+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:30:41.097511+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:30:44.969275+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:31:17.166900+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:31:23.263117+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:33:06.279726+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:33:09.911424+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:33:21.741295+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 17 mismatch: expected 'Last Update (UTC)', got 'Last Update (WIB)'"
+  },
+  {
+    "timestamp": "2026-06-12T16:33:23.551531+00:00",
+    "event": "ROLLBACK_BLOCKED",
+    "details": "Sheet timestamp 2026-06-12T23:31:00+00:00 is 25056s ahead of now. Possible manual edit or clock skew. Blocking write."
+  },
+  {
+    "timestamp": "2026-06-12T16:33:25.790033+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:33:38.228969+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:34:36.372620+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:34:39.723212+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:35:45.211540+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:35:57.787123+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:36:10.977520+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:36:23.361462+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:37:26.145934+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-12T16:37:29.658647+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:45:47.122298+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:45:51.192764+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:47:08.366241+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:47:12.194061+00:00",
+    "event": "WRITE_OK",
+    "details": "26 snapshots, 27 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:48:25.801720+00:00",
+    "event": "WRITE_OK",
+    "details": "30 snapshots, 31 rows total"
+  },
+  {
+    "timestamp": "2026-06-13T03:48:29.404233+00:00",
+    "event": "WRITE_OK",
+    "details": "30 snapshots, 31 rows total"
+  },
+  {
+    "timestamp": "2026-06-14T17:17:10.789551+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-14T17:17:14.509793+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-14T17:58:14.928424+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-14T17:58:18.490188+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:40:20.111085+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:40:24.630793+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:41:44.616823+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:41:49.116525+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:43:11.466512+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:43:15.755659+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:44:35.453087+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:44:39.721425+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:46:00.938625+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T02:46:05.131447+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:33:40.814691+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'No', got 'Ticker'; Column 2 mismatch: expected 'Ticker', got 'Last Price'; Column 3 mismatch: expected 'Company Name', got 'Change %'; Column 4 mismatch: expected 'Sector', got 'High'; Column 5 mismatch: expected 'Sparkline', got 'Low'; Column 6 mismatch: expected 'Price', got 'Open'; Column 7 mismatch: expected 'Change%', got 'Volume'; Column 8 mismatch: expected 'Change', got 'Total Bid Lot'; Column 9 mismatch: expected 'PriceOpen', got 'Total Ask Lot'; Column 10 mismatch: expected 'High', got 'Imbalance Ratio'; Column 11 mismatch: expected 'Low', got 'Foreign Net'; Column 12 mismatch: expected 'ClosePrev', got 'ARA'; Column 13 mismatch: expected 'Gap_Pct', got 'ARB'; Column 14 mismatch: expected 'Gap_Flag', got 'Support'; Column 15 mismatch: expected 'Volume', got 'Resistance'; Column 16 mismatch: expected 'Vol_Avg', got 'Source'; Column 17 mismatch: expected 'Vol_Ratio', got 'Last Update (UTC)'; Missing column 18: expected 'Vol_Flag'; Missing column 19: expected 'Daily_Range_Pct'; Missing column 20: expected 'Vol_Level'; Missing column 21: expected 'MarketCap'; Missing column 22: expected 'PE'; Missing column 23: expected 'PE_Grade'; Missing column 24: expected 'EPS'; Missing column 25: expected 'Beta'; Missing column 26: expected '52W High'; Missing column 27: expected '52W Low'; Missing column 28: expected 'Dist to 52W High'; Missing column 29: expected 'Dist_52W_Low'; Missing column 30: expected '52W_Range_Pct'; Missing column 31: expected 'Range_Signal'; Missing column 32: expected 'MA20'; Missing column 33: expected 'MA50'; Missing column 34: expected 'MA200'; Missing column 35: expected 'Support'; Missing column 36: expected 'Breakout'; Missing column 37: expected 'Reversal'; Missing column 38: expected 'BSJP'; Missing column 39: expected 'Signal'; Missing column 40: expected 'Trend'; Missing column 41: expected 'Score'; Missing column 42: expected 'Score v2'; Missing column 43: expected 'Rank'; Missing column 44: expected 'Final_Signal'; Missing column 45: expected 'SL_Practical'; Missing column 46: expected 'TP_Target'; Missing column 47: expected 'RR_Ratio'; Missing column 48: expected 'ATR14'; Missing column 49: expected 'ATR %'; Missing column 50: expected 'RSI14'; Missing column 51: expected 'RSI Signal'; Missing column 52: expected 'Status'; Missing column 53: expected 'Volume_Flag'; Missing column 54: expected 'Liquidity_Score'; Missing column 55: expected 'Momentum_Score'; Missing column 56: expected 'ARA_Score'; Missing column 57: expected 'ARA_Dist_Pct'; Missing column 58: expected 'ARA_Stage'; Missing column 59: expected 'Gap_Score'; Missing column 60: expected 'Last Update'"
+  },
+  {
+    "timestamp": "2026-06-15T03:33:45.066872+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:38:43.880445+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Missing column 61: expected 'UMA'; Missing column 62: expected 'Corp Action'"
+  },
+  {
+    "timestamp": "2026-06-15T03:38:47.674459+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:43:10.384757+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 61 mismatch: expected 'Total Bid Lot', got 'UMA'; Column 62 mismatch: expected 'Total Ask Lot', got 'Corp Action'; Missing column 63: expected 'Imbalance Ratio'; Missing column 64: expected 'Foreign Net'; Missing column 65: expected 'ARA'; Missing column 66: expected 'ARB'; Missing column 67: expected 'Source'; Missing column 68: expected 'UMA'; Missing column 69: expected 'Corp Action'"
+  },
+  {
+    "timestamp": "2026-06-15T03:43:15.419403+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:43:24.368777+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:54:20.190518+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:54:29.065885+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:55:46.518414+00:00",
+    "event": "STRUCTURE_FAIL",
+    "details": "Column 1 mismatch: expected 'No', got 'Ticker'; Column 2 mismatch: expected 'Ticker', got 'Last Price'; Column 3 mismatch: expected 'Company Name', got 'Change %'; Column 4 mismatch: expected 'Sector', got 'High'; Column 5 mismatch: expected 'Sparkline', got 'Low'; Column 6 mismatch: expected 'Price', got 'Open'; Column 7 mismatch: expected 'Change%', got 'Volume'; Column 8 mismatch: expected 'Change', got 'Total Bid Lot'; Column 9 mismatch: expected 'PriceOpen', got 'Total Ask Lot'; Column 10 mismatch: expected 'High', got 'Imbalance Ratio'; Column 11 mismatch: expected 'Low', got 'Foreign Net'; Column 12 mismatch: expected 'ClosePrev', got 'ARA'; Column 13 mismatch: expected 'Gap_Pct', got 'ARB'; Column 14 mismatch: expected 'Gap_Flag', got 'Support'; Column 15 mismatch: expected 'Volume', got 'Resistance'; Column 16 mismatch: expected 'Vol_Avg', got 'Source'; Column 17 mismatch: expected 'Vol_Ratio', got 'Last Update (UTC)'; Missing column 18: expected 'Vol_Flag'; Missing column 19: expected 'Daily_Range_Pct'; Missing column 20: expected 'Vol_Level'; Missing column 21: expected 'MarketCap'; Missing column 22: expected 'PE'; Missing column 23: expected 'PE_Grade'; Missing column 24: expected 'EPS'; Missing column 25: expected 'Beta'; Missing column 26: expected '52W High'; Missing column 27: expected '52W Low'; Missing column 28: expected 'Dist to 52W High'; Missing column 29: expected 'Dist_52W_Low'; Missing column 30: expected '52W_Range_Pct'; Missing column 31: expected 'Range_Signal'; Missing column 32: expected 'MA20'; Missing column 33: expected 'MA50'; Missing column 34: expected 'MA200'; Missing column 35: expected 'Support'; Missing column 36: expected 'Breakout'; Missing column 37: expected 'Reversal'; Missing column 38: expected 'BSJP'; Missing column 39: expected 'Signal'; Missing column 40: expected 'Trend'; Missing column 41: expected 'Score'; Missing column 42: expected 'Score v2'; Missing column 43: expected 'Rank'; Missing column 44: expected 'Final_Signal'; Missing column 45: expected 'SL_Practical'; Missing column 46: expected 'TP_Target'; Missing column 47: expected 'RR_Ratio'; Missing column 48: expected 'ATR14'; Missing column 49: expected 'ATR %'; Missing column 50: expected 'RSI14'; Missing column 51: expected 'RSI Signal'; Missing column 52: expected 'Status'; Missing column 53: expected 'Volume_Flag'; Missing column 54: expected 'Liquidity_Score'; Missing column 55: expected 'Momentum_Score'; Missing column 56: expected 'ARA_Score'; Missing column 57: expected 'ARA_Dist_Pct'; Missing column 58: expected 'ARA_Stage'; Missing column 59: expected 'Gap_Score'; Missing column 60: expected 'Last Update'; Missing column 61: expected 'Total Bid Lot'; Missing column 62: expected 'Total Ask Lot'; Missing column 63: expected 'Imbalance Ratio'; Missing column 64: expected 'Foreign Net'; Missing column 65: expected 'ARA'; Missing column 66: expected 'ARB'; Missing column 67: expected 'Source'; Missing column 68: expected 'UMA'; Missing column 69: expected 'Corp Action'"
+  },
+  {
+    "timestamp": "2026-06-15T03:55:50.092810+00:00",
+    "event": "WRITE_OK",
+    "details": "1 snapshots, 2 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:55:57.093963+00:00",
+    "event": "WRITE_OK",
+    "details": "1 snapshots, 2 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T03:59:57.956751+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T04:00:09.985852+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T04:02:19.623256+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T04:02:31.645810+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T04:03:39.670164+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T04:03:50.753671+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T05:59:09.599459+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T05:59:19.600060+00:00",
+    "event": "WRITE_OK",
+    "details": "32 snapshots, 33 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T06:01:58.490398+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-15T06:02:08.143280+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  }
+]

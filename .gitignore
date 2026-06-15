@@ -2,8 +2,8 @@
 .env
 .venv/
 
-# Runtime data
-data/
+# Runtime data — only ignore persistent DB & local state
+data/realtime_history.db
 logs/
 .cache/
 
