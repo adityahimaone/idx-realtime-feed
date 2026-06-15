@@ -1408,19 +1408,36 @@ with tab4:
     with st.spinner("⚡ Fetching live trending list from Stockbit API..."):
         trending_api_list = asyncio.run(fetch_stockbit_trending())
         
-    if trending_api_list and scored_list:
+    if trending_api_list:
         # Create a ranking lookup map from the Stockbit API response
         trending_rank_map = {item.get("symbol", "").upper().strip(): idx + 1 for idx, item in enumerate(trending_api_list)}
         
         matched_trending = []
-        for s in scored_list:
-            ticker = s["Ticker"]
-            if ticker in trending_rank_map:
-                hist_row = s["hist_row_obj"]
-                raw_data = s["raw_data_obj"]
+        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
+        
+        for ticker, rank_idx in trending_rank_map.items():
+            if ticker in hist_lookup:
+                hist_row = hist_lookup[ticker]
+                
+                # Retrieve from screener_data if loaded, otherwise pull fallback values from row
+                if ticker in st.session_state.screener_data:
+                    raw_data = st.session_state.screener_data[ticker]
+                else:
+                    raw_data = {
+                        "last": safe_float(hist_row.get("Price")),
+                        "open": safe_float(hist_row.get("PriceOpen")),
+                        "high": safe_float(hist_row.get("High")),
+                        "low": safe_float(hist_row.get("Low")),
+                        "volume": safe_float(hist_row.get("Volume")),
+                        "prev_close": safe_float(hist_row.get("ClosePrev")),
+                        "frequency": safe_float(hist_row.get("Frequency", 0)),
+                        "value": safe_float(hist_row.get("Value", 0)),
+                        "foreign_buy": 0.0,
+                        "foreign_sell": 0.0
+                    }
                 
                 # Fetch live values
-                current_price = s["Live Price"]
+                current_price = raw_data["last"]
                 prev_close = safe_float(hist_row.get("ClosePrev", 0))
                 if prev_close <= 0:
                     prev_close = current_price
@@ -1486,7 +1503,7 @@ with tab4:
                 matched_trending.append({
                     "Stockbit Rank": trending_rank_map[ticker],
                     "Ticker": ticker,
-                    "Company Name": s["Company Name"],
+                    "Company Name": hist_row.get("Company Name", ""),
                     "Price": current_price,
                     "Change %": change_pct,
                     "RVol": rvol,
