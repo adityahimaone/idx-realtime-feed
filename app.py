@@ -446,6 +446,10 @@ def fetch_idx_source(symbol: str, idx_summary_dict: dict = None) -> dict:
             "low": safe_float(item.get("Low")),
             "volume": safe_float(item.get("Volume")),
             "prev_close": safe_float(item.get("Previous")),
+            "frequency": safe_float(item.get("Frequency")),
+            "value": safe_float(item.get("Value")),
+            "foreign_buy": safe_float(item.get("ForeignBuy")),
+            "foreign_sell": safe_float(item.get("ForeignSell")),
             "source_ts": source_ts,
             "error": None
         }
@@ -478,6 +482,10 @@ def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = N
             "low": safe_float(hist_row.get("Low")),
             "volume": safe_float(hist_row.get("Volume")),
             "prev_close": safe_float(hist_row.get("ClosePrev")),
+            "frequency": safe_float(hist_row.get("Frequency", 0)),
+            "value": safe_float(hist_row.get("Value", 0)) if safe_float(hist_row.get("Value", 0)) > 0 else (safe_float(hist_row.get("Price")) * safe_float(hist_row.get("Volume")) * 100),
+            "foreign_buy": 0.0,
+            "foreign_sell": 0.0,
             "source": "gsheet_fallback",
             "source_ts": None,
             "report": "All sources failed, fallback to GSheets row values"
@@ -509,6 +517,10 @@ def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = N
         "low": res["low"],
         "volume": res["volume"],
         "prev_close": res["prev_close"],
+        "frequency": res.get("frequency", 0.0),
+        "value": res.get("value", 0.0),
+        "foreign_buy": res.get("foreign_buy", 0.0),
+        "foreign_sell": res.get("foreign_sell", 0.0),
         "source": winner["name"],
         "source_ts": winner["ts"],
         "report": f"{winner['name']} ({age_str})"
@@ -1114,16 +1126,22 @@ if st.session_state.screener_data:
             "Source Used": data["source"],
             "color": score_data["color"],
             "raw_data_obj": data,
-            "hist_row_obj": hist_row
+            "hist_row_obj": hist_row,
+            "frequency": data.get("frequency", 0.0),
+            "value": data.get("value", 0.0),
+            "foreign_buy": data.get("foreign_buy", 0.0),
+            "foreign_sell": data.get("foreign_sell", 0.0)
         })
 
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📋 Displaying Tickers",
     "🎯 Intraday Buy Recommendations",
     "📊 General Screener Board",
+    "🔥 Trending Stocks",
+    "🌙 BSJP Recommendations",
     "🔍 Deep Stock Analysis (Exodus API)"
 ])
 
@@ -1362,9 +1380,250 @@ with tab3:
         st.info("Refresh the feed to display general screener results.")
 
 # ============================================================================
-# TAB 4: DEEP STOCK ANALYSIS (EXODUS API)
+# TAB 4: TRENDING STOCKS
 # ============================================================================
 with tab4:
+    st.markdown("### 🔥 Trending Stocks Board")
+    st.caption("Identify stocks showing strong momentum, liquidity, and volume surges.")
+    
+    if scored_list:
+        trending_data = []
+        for s in scored_list:
+            hist_row = s["hist_row_obj"]
+            raw_data = s["raw_data_obj"]
+            
+            # Extract live values
+            last = s["Live Price"]
+            prev_close = safe_float(hist_row.get("ClosePrev", 0))
+            if prev_close <= 0:
+                prev_close = last
+            
+            vol_today = safe_float(raw_data.get("volume", 0))
+            vol_avg20d = safe_float(hist_row.get("Vol_Avg", 0))
+            
+            freq_today = safe_float(raw_data.get("frequency", 0))
+            # Assume 1000 tx as a sensible default average frequency if not found
+            freq_avg20d = safe_float(hist_row.get("Freq_Avg", 1000))
+            if freq_avg20d <= 0:
+                freq_avg20d = 1000
+                
+            val_today = safe_float(raw_data.get("value", 0))
+            val_avg20d = safe_float(hist_row.get("Val_Avg", 100000000))
+            if val_avg20d <= 0:
+                val_avg20d = 100000000
+                
+            f_buy = safe_float(raw_data.get("foreign_buy", 0))
+            f_sell = safe_float(raw_data.get("foreign_sell", 0))
+            net_foreign = f_buy - f_sell
+
+            # 1. Pre-filter validation
+            vsr = vol_today / vol_avg20d if vol_avg20d > 0 else 1.0
+            price_change = ((last - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+            
+            # Threshold pre-filters
+            if vsr < 2.0:
+                continue
+            if abs(price_change) < 0.5:
+                continue
+            if freq_today < 200:
+                continue
+            if val_today < 100000000: # Rp 100 juta in Rupiah
+                continue
+
+            # 2. Score calculations
+            # ① Volume Surge Ratio (35%)
+            if vsr >= 5.0:
+                score_vsr = 100
+            elif vsr >= 2.0:
+                score_vsr = 70
+            else:
+                score_vsr = 40
+                
+            # ② Frequency Surge (25%)
+            fsr = freq_today / freq_avg20d
+            if fsr >= 3.0:
+                score_fsr = 100
+            elif fsr >= 1.5:
+                score_fsr = 75
+            elif fsr >= 1.0:
+                score_fsr = 50
+            else:
+                score_fsr = 20
+                
+            # ③ Price Change % (20%)
+            if abs(price_change) >= 5.0:
+                score_prc = 100
+            elif abs(price_change) >= 2.0:
+                score_prc = 80
+            elif abs(price_change) >= 0.5:
+                score_prc = 60
+            else:
+                score_prc = 30
+                
+            # ④ Value Surge (15%)
+            val_ratio = val_today / val_avg20d
+            if val_ratio >= 3.0:
+                score_val = 100
+            elif val_ratio >= 1.5:
+                score_val = 75
+            elif val_ratio >= 1.0:
+                score_val = 50
+            else:
+                score_val = 20
+                
+            # ⑤ Net Foreign Direction (10%)
+            score_foreign = 100 if net_foreign > 0 else (50 if net_foreign == 0 else 20)
+
+            # Combined weighted score
+            total_trend_score = int(round(
+                score_vsr * 0.35 +
+                score_fsr * 0.25 +
+                score_prc * 0.20 +
+                score_val * 0.15 +
+                score_foreign * 0.10
+            ))
+            
+            # VSR Interpretation
+            if vsr > 10.0:
+                vsr_label, vsr_col = "Extreme ⚠", "#FF6B6B"
+            elif vsr >= 5.0:
+                vsr_label, vsr_col = "Trending 🔥", "#FFA500"
+            elif vsr >= 2.0:
+                vsr_label, vsr_col = "Radar ⚡", "#FFFF00"
+            else:
+                vsr_label, vsr_col = "Normal", "#94A3B8"
+
+            trending_data.append({
+                "Ticker": s["Ticker"],
+                "Company Name": s["Company Name"],
+                "Sector": s["Sector"],
+                "Live Price": last,
+                "Price Change %": price_change,
+                "VSR": vsr,
+                "VSR Status": vsr_label,
+                "vsr_color": vsr_col,
+                "Freq Surge": fsr,
+                "Value Today": val_today,
+                "Net Foreign (Lot)": net_foreign,
+                "Trend Score": total_trend_score
+            })
+            
+        if trending_data:
+            trend_df = pd.DataFrame(trending_data).sort_values(by="Trend Score", ascending=False)
+            st.dataframe(
+                trend_df,
+                column_config={
+                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
+                    "Price Change %": st.column_config.NumberColumn("Price Change %", format="%+.2f%%"),
+                    "VSR": st.column_config.NumberColumn("VSR", format="%.2f x"),
+                    "Freq Surge": st.column_config.NumberColumn("Freq Surge", format="%.2f x"),
+                    "Value Today": st.column_config.NumberColumn("Value (IDR)", format="Rp %d"),
+                    "Net Foreign (Lot)": st.column_config.NumberColumn("Net Foreign (Lot)", format="%+d"),
+                    "Trend Score": st.column_config.ProgressColumn(
+                        "Trend Score",
+                        min_value=0,
+                        max_value=100,
+                        format="%d"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No tickers currently pass the minimum trending filters (VSR >= 2x, |ΔP%| >= 0.5%, Freq >= 200 tx, Val >= Rp 100M).")
+    else:
+        st.info("Refresh the live feed to calculate trending stock signals.")
+
+# ============================================================================
+# TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
+# ============================================================================
+with tab5:
+    st.markdown("### 🌙 BSJP (Beli Sore, Jual Pagi) Recommendations")
+    st.caption("BSJP setups are ideally analyzed between 15:00 - 16:15 WIB before market close.")
+    
+    if scored_list:
+        bsjp_data = []
+        for s in scored_list:
+            hist_row = s["hist_row_obj"]
+            raw_data = s["raw_data_obj"]
+            
+            # BSJP criteria check
+            # 1. Closed positive and near high of the day (price is in upper 30% of day's range)
+            price = s["Live Price"]
+            high = safe_float(raw_data.get("high", price))
+            low = safe_float(raw_data.get("low", price))
+            prev_close = safe_float(hist_row.get("ClosePrev", price))
+            
+            chg = s["Change %"]
+            
+            # Standard support levels
+            support = safe_float(hist_row.get("Support", price * 0.95))
+            if support <= 0 or support >= price:
+                support = price * 0.95
+                
+            resistance = safe_float(hist_row.get("Breakout", price * 1.05))
+            if resistance <= 0 or resistance <= price:
+                resistance = price * 1.05
+                
+            day_range = high - low
+            price_pos = (price - low) / day_range if day_range > 0 else 1.0
+            
+            # Check setup fit
+            if chg > 1.0 and price_pos >= 0.7:
+                # Calculate R/R for morning selling target (TP is breakout resistance, SL practical support or -3% maximum)
+                tp = round(resistance, 2)
+                sl = round(max(support, price * 0.97), 2)
+                rr = (tp - price) / max(1.0, price - sl)
+                
+                # Check setup score based on score card and vol surge
+                vsr = safe_float(raw_data.get("volume", 0)) / safe_float(hist_row.get("Vol_Avg", 1)) if safe_float(hist_row.get("Vol_Avg", 1)) > 0 else 1.0
+                setup_score = int(round(s["Intraday Score"] * 0.7 + min(100, vsr * 20) * 0.3))
+                
+                if rr >= 1.2 and setup_score >= 60:
+                    bsjp_data.append({
+                        "Ticker": s["Ticker"],
+                        "Company Name": s["Company Name"],
+                        "Live Price": price,
+                        "Change %": chg,
+                        "Price Pos (Day Range)": f"{int(price_pos * 100)}%",
+                        "Volume Surge (VSR)": vsr,
+                        "Entry (Buy Sore)": price,
+                        "Target (Jual Pagi)": tp,
+                        "Stop Loss (SL)": sl,
+                        "Risk/Reward Ratio": round(rr, 2),
+                        "Setup Score": setup_score
+                    })
+                    
+        if bsjp_data:
+            st.dataframe(
+                pd.DataFrame(bsjp_data).sort_values(by="Setup Score", ascending=False),
+                column_config={
+                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
+                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                    "Volume Surge (VSR)": st.column_config.NumberColumn("Volume Surge (VSR)", format="%.2f x"),
+                    "Entry (Buy Sore)": st.column_config.NumberColumn("Entry Price", format="IDR %d"),
+                    "Target (Jual Pagi)": st.column_config.NumberColumn("Target TP", format="IDR %d"),
+                    "Stop Loss (SL)": st.column_config.NumberColumn("Stop Loss", format="IDR %d"),
+                    "Risk/Reward Ratio": st.column_config.NumberColumn("R/R", format="%.2f x"),
+                    "Setup Score": st.column_config.ProgressColumn(
+                        "Setup Score",
+                        min_value=0,
+                        max_value=100,
+                        format="%d"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No tickers currently match standard BSJP setups (Positive change > 1%, closing in upper 30% of day's range, R/R >= 1.2x).")
+    else:
+        st.info("Refresh the live feed to display BSJP setups.")
+
+# ============================================================================
+# TAB 6: DEEP STOCK ANALYSIS (EXODUS API)
+# ============================================================================
+with tab6:
     st.markdown("### 🔍 Deep Stock Analysis (Exodus API)")
     st.caption("Fetches real-time bid/ask queue details and company statistics from unofficial Stockbit Exodus API.")
     
