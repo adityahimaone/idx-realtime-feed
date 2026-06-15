@@ -905,15 +905,41 @@ with st.sidebar:
             # Rerun trigger
             st.session_state["trigger_auto_scan"] = True
         else:
-            st.info(f"⏳ Next auto-scan in: {time_left // 60}m {time_left % 60}s")
-            # Using st.empty with custom javascript to trigger page rerun after time_left seconds
+            # Display a dynamic HTML container that updates the countdown in real time via local JS
+            countdown_placeholder = st.empty()
+            countdown_placeholder.markdown(
+                f'<div style="background-color: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px; border-radius: 6px; color: #38BDF8; font-weight: bold; font-size: 0.9em; margin-bottom: 10px;">⏳ Next auto-scan in: <span id="countdown_timer_span">{time_left // 60}m {time_left % 60}s</span></div>',
+                unsafe_allow_html=True
+            )
+            
             st.components.v1.html(
                 f"""
                 <script>
-                window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
-                setTimeout(function() {{
-                    window.parent.location.reload();
-                }}, {time_left * 1000});
+                var targetTime = {st.session_state.next_refresh_time * 1000};
+                
+                function updateTimer() {{
+                    var now = new Date().getTime();
+                    var diff = Math.max(0, Math.floor((targetTime - now) / 1000));
+                    
+                    var minutes = Math.floor(diff / 60);
+                    var seconds = diff % 60;
+                    
+                    // Update text inside parent frame DOM securely
+                    var span = window.parent.document.getElementById("countdown_timer_span");
+                    if (span) {{
+                        span.innerText = minutes + "m " + seconds + "s";
+                    }}
+                    
+                    if (diff <= 0) {{
+                        clearInterval(interval);
+                        // Trigger reload when reaching zero
+                        window.parent.location.reload();
+                    }}
+                }}
+                
+                // Immediately check once and set interval for subsequent updates
+                updateTimer();
+                var interval = setInterval(updateTimer, 1000);
                 </script>
                 """,
                 height=0,
