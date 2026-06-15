@@ -1006,44 +1006,33 @@ with st.sidebar:
             # Rerun trigger
             st.session_state["trigger_auto_scan"] = True
         else:
-            countdown_html = f"""
-            <div style="background-color: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px; border-radius: 6px; color: #38BDF8; font-weight: bold; font-size: 0.9em; margin-bottom: 10px;">
-                ⏳ Next auto-scan in: <span id="countdown_timer_span">{time_left // 60}m {time_left % 60}s</span>
-            </div>
-            <script>
-            (function() {{
-                var targetTime = {st.session_state.next_refresh_time * 1000};
-                var refreshInterval = {refresh_interval};
-                
-                function updateTimer() {{
-                    var now = new Date().getTime();
-                    var diff = Math.max(0, Math.floor((targetTime - now) / 1000));
-                    
-                    var minutes = Math.floor(diff / 60);
-                    var seconds = diff % 60;
-                    
-                    var span = document.getElementById("countdown_timer_span") || window.parent.document.getElementById("countdown_timer_span");
-                    if (span) {{
-                        span.innerText = minutes + "m " + seconds + "s";
-                    }}
-                    
-                    if (diff <= 0) {{
-                        clearInterval(interval);
-                        var loc = window.location;
-                        try {{
-                            if (window.parent && window.parent.location) {{
-                                loc = window.parent.location;
-                            }}
-                        }} catch(e) {{}}
-                        loc.href = loc.pathname + "?auto_refresh=true&auto_scan=true&refresh_interval=" + refreshInterval;
-                    }}
-                }}
-                
-                updateTimer();
-                var interval = setInterval(updateTimer, 1000);
-            }})();
-            </script>
-            """
+            countdown_html = (
+                f'<div style="background-color: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 10px; border-radius: 6px; color: #38BDF8; font-weight: bold; font-size: 0.9em; margin-bottom: 10px;">'
+                f'⏳ Next auto-scan in: <span id="countdown_timer_span">{time_left // 60}m {time_left % 60}s</span>'
+                f'</div>'
+                f'<script>'
+                f'(function() {{'
+                f'  var targetTime = {st.session_state.next_refresh_time * 1000};'
+                f'  var refreshInterval = {refresh_interval};'
+                f'  var interval = setInterval(function() {{'
+                f'    var now = new Date().getTime();'
+                f'    var diff = Math.max(0, Math.floor((targetTime - now) / 1000));'
+                f'    var minutes = Math.floor(diff / 60);'
+                f'    var seconds = diff % 60;'
+                f'    var span = document.getElementById("countdown_timer_span") || window.parent.document.getElementById("countdown_timer_span");'
+                f'    if (span) {{ span.innerText = minutes + "m " + seconds + "s"; }}'
+                f'    if (diff <= 0) {{'
+                f'      clearInterval(interval);'
+                f'      var loc = window.location;'
+                f'      try {{'
+                f'        if (window.parent && window.parent.location) {{ loc = window.parent.location; }}'
+                f'      }} catch(e) {{}}'
+                f'      loc.href = loc.pathname + "?auto_refresh=true&auto_scan=true&refresh_interval=" + refreshInterval;'
+                f'    }}'
+                f'  }}, 1000);'
+                f'}})();'
+                f'</script>'
+            )
             st.markdown(countdown_html, unsafe_allow_html=True)
     else:
         if st.query_params.get("auto_refresh") == "true":
