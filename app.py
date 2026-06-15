@@ -27,6 +27,7 @@ from core.logger import logger
 from services.auth_service import auth_service
 from providers.stockbit_provider import StockbitProvider
 from repositories.sheets_repository import sheets_repository
+from repositories.sqlite_repository import sqlite_repository
 
 # Timezone normalization
 WIB = pytz.timezone("Asia/Jakarta")
@@ -931,9 +932,9 @@ if "screener_data" not in st.session_state:
 if "last_fetch" not in st.session_state:
     st.session_state.last_fetch = None
 if "custom_watchlist" not in st.session_state:
-    st.session_state.custom_watchlist = []
+    st.session_state.custom_watchlist = sqlite_repository.get_watchlist()
 if "portfolio" not in st.session_state:
-    st.session_state.portfolio = []
+    st.session_state.portfolio = sqlite_repository.get_portfolio()
 
 # Populate screener_data with Google Sheets cached prices for all tickers
 for _, row in ticker_df.iterrows():
@@ -1296,7 +1297,8 @@ with tab_wl:
         st.write("") # Spacer
         if st.button("➕ Add to Watchlist", use_container_width=True):
             if add_ticker_select not in st.session_state.custom_watchlist:
-                st.session_state.custom_watchlist.append(add_ticker_select)
+                sqlite_repository.add_watchlist(add_ticker_select)
+                st.session_state.custom_watchlist = sqlite_repository.get_watchlist()
                 st.toast(f"Added {add_ticker_select} to watchlist! 🚀")
                 st.rerun()
             else:
@@ -1362,13 +1364,15 @@ with tab_wl:
                 st.write("") # Spacer
                 st.write("") # Spacer
                 if st.button("❌ Remove Selected", use_container_width=True):
-                    st.session_state.custom_watchlist.remove(rem_ticker_select)
+                    sqlite_repository.remove_watchlist(rem_ticker_select)
+                    st.session_state.custom_watchlist = sqlite_repository.get_watchlist()
                     st.toast(f"Removed {rem_ticker_select} from watchlist.")
                     st.rerun()
             with col_rem3:
                 st.write("") # Spacer
                 st.write("") # Spacer
                 if st.button("🗑️ Clear Watchlist", use_container_width=True):
+                    sqlite_repository.clear_watchlist()
                     st.session_state.custom_watchlist = []
                     st.toast("Watchlist cleared.")
                     st.rerun()
@@ -1411,21 +1415,10 @@ with tab_port:
         st.write("") # Spacer
         st.write("") # Spacer
         if st.button("➕ Add Asset", use_container_width=True):
-            # Check if asset already in portfolio to overwrite/merge or append
-            found = False
-            for asset in st.session_state.portfolio:
-                if asset["Ticker"] == port_ticker_select:
-                    # Update/Overwrite or merge
-                    asset["Buy Price"] = buy_price_input
-                    asset["Lots"] = lots_input
-                    found = True
-                    break
-            if not found:
-                st.session_state.portfolio.append({
-                    "Ticker": port_ticker_select,
-                    "Buy Price": buy_price_input,
-                    "Lots": lots_input
-                })
+            # Check and clear old entry for this ticker before adding new
+            sqlite_repository.remove_portfolio_by_ticker(port_ticker_select)
+            sqlite_repository.add_portfolio(port_ticker_select, buy_price_input, lots_input)
+            st.session_state.portfolio = sqlite_repository.get_portfolio()
             st.toast(f"Added {port_ticker_select} to portfolio!")
             st.rerun()
 
@@ -1513,14 +1506,15 @@ with tab_port:
             st.write("")
             st.write("")
             if st.button("❌ Remove Asset", use_container_width=True):
-                # find and remove
-                st.session_state.portfolio = [a for a in st.session_state.portfolio if a["Ticker"] != rem_asset_select]
+                sqlite_repository.remove_portfolio_by_ticker(rem_asset_select)
+                st.session_state.portfolio = sqlite_repository.get_portfolio()
                 st.toast(f"Removed {rem_asset_select} from portfolio.")
                 st.rerun()
         with col_prem3:
             st.write("")
             st.write("")
             if st.button("🗑️ Reset Portfolio", use_container_width=True):
+                sqlite_repository.clear_portfolio()
                 st.session_state.portfolio = []
                 st.toast("Portfolio cleared.")
                 st.rerun()

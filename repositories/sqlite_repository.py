@@ -29,6 +29,17 @@ CREATE TABLE IF NOT EXISTS orderbook_history (
 
 CREATE INDEX IF NOT EXISTS idx_orderbook_ticker_ts
     ON orderbook_history (ticker, timestamp);
+
+CREATE TABLE IF NOT EXISTS custom_watchlist (
+    ticker TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS portfolio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    buy_price REAL NOT NULL,
+    lots INTEGER NOT NULL
+);
 """
 
 
@@ -68,6 +79,52 @@ class SQLiteRepository:
                     snapshot.resistance_price,
                 ),
             )
+
+    # Watchlist Persistent Methods
+    def get_watchlist(self) -> list[str]:
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT ticker FROM custom_watchlist")
+            return [row[0] for row in cursor.fetchall()]
+
+    def add_watchlist(self, ticker: str) -> None:
+        with self._connect() as conn:
+            conn.execute("INSERT OR IGNORE INTO custom_watchlist (ticker) VALUES (?)", (ticker.upper().strip(),))
+
+    def remove_watchlist(self, ticker: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM custom_watchlist WHERE ticker = ?", (ticker.upper().strip(),))
+
+    def clear_watchlist(self) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM custom_watchlist")
+
+    # Portfolio Persistent Methods
+    def get_portfolio(self) -> list[dict]:
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT id, ticker, buy_price, lots FROM portfolio")
+            return [
+                {"id": row[0], "Ticker": row[1], "Buy Price": row[2], "Lots": row[3]}
+                for row in cursor.fetchall()
+            ]
+
+    def add_portfolio(self, ticker: str, buy_price: float, lots: int) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO portfolio (ticker, buy_price, lots) VALUES (?, ?, ?)",
+                (ticker.upper().strip(), buy_price, lots),
+            )
+
+    def remove_portfolio_by_id(self, item_id: int) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM portfolio WHERE id = ?", (item_id,))
+
+    def remove_portfolio_by_ticker(self, ticker: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM portfolio WHERE ticker = ?", (ticker.upper().strip(),))
+
+    def clear_portfolio(self) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM portfolio")
 
 
 sqlite_repository = SQLiteRepository()
