@@ -837,13 +837,11 @@ st.title("📈 IDX Intraday Multi-Source Screener [IRW]")
 now_wib = datetime.now(WIB)
 is_day_trade = now_wib.weekday() < 5 and (
     (now_wib.hour == 9 and now_wib.minute >= 0) or
-    (now_wib.hour > 9 and now_wib.hour < 12) or
-    (now_wib.hour == 11 and now_wib.minute <= 30) or
-    (now_wib.hour >= 13 and now_wib.hour < 16) or
-    (now_wib.hour == 16 and now_wib.minute <= 15)
+    (now_wib.hour > 9 and now_wib.hour < 16) or
+    (now_wib.hour == 16 and now_wib.minute == 0)
 )
 
-live_badge = '<span class="live-label-container"><span class="pulse-dot pulse-green"></span>🔴 LIVE</span>' if is_day_trade else '<span class="live-label-container" style="background-color: rgba(245,158,11,0.15); color: #F59E0B; border-color: rgba(245,158,11,0.3);"><span class="pulse-dot pulse-yellow"></span>⏸️ CLOSED</span>'
+live_badge = '<span class="live-label-container">LIVE 🔴</span>' if is_day_trade else '<span class="live-label-container" style="background-color: rgba(245,158,11,0.15); color: #F59E0B; border-color: rgba(245,158,11,0.3);"><span class="pulse-dot pulse-yellow"></span>⏸️ CLOSED</span>'
 
 status_html = f"""
 <div class="status-container">
@@ -1016,6 +1014,12 @@ with st.sidebar:
     min_score = st.slider("Minimum Historical Score v2", 0, 100, 50)
     
     st.markdown("---")
+    st.subheader("⚙️ Tab Scope Options")
+    exclude_filters_trending = st.checkbox("Exclude filters for Trending Stocks", value=True, help="Display all matching tickers regardless of Ranks/Sectors.")
+    exclude_filters_bsjp = st.checkbox("Exclude filters for BSJP", value=True, help="Display all BSJP setups regardless of Ranks/Sectors.")
+    exclude_filters_minervini = st.checkbox("Exclude filters for Minervini Trend", value=True, help="Display all Minervini setups regardless of Ranks/Sectors.")
+    
+    st.markdown("---")
     
     # Manual Ticker Lookup
     search_ticker = st.text_input("Lookup Specific Ticker (e.g. ADRO)", "").upper().strip()
@@ -1124,8 +1128,35 @@ with col_info:
 # SCREENER PROCESS & DATA EXTRACTION
 # ============================================================================
 scored_list = []
+scored_list_global = []
 if st.session_state.screener_data:
     hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
+    
+    # Global population for unfiltered tabs
+    for ticker, data in st.session_state.screener_data.items():
+        hist_row = hist_lookup.get(ticker)
+        if hist_row:
+            score_data = compute_intraday_score(data, hist_row)
+            scored_list_global.append({
+                "Ticker": ticker,
+                "Company Name": hist_row.get("Company Name", ""),
+                "Sector": hist_row.get("Sector", ""),
+                "Live Price": data["last"],
+                "Change %": score_data["change_pct"],
+                "Vol Spike": score_data["vol_spike"],
+                "Intraday Score": score_data["score"],
+                "Live Signal": score_data["signal"],
+                "Source Used": data["source"],
+                "color": score_data["color"],
+                "raw_data_obj": data,
+                "hist_row_obj": hist_row,
+                "frequency": data.get("frequency", 0.0),
+                "value": data.get("value", 0.0),
+                "foreign_buy": data.get("foreign_buy", 0.0),
+                "foreign_sell": data.get("foreign_sell", 0.0)
+            })
+
+    # Sidebar Filtered population for general tabs
     for ticker in display_list:
         if ticker not in st.session_state.screener_data:
             continue
@@ -1413,7 +1444,8 @@ with tab4:
         trending_rank_map = {item.get("symbol", "").upper().strip(): idx + 1 for idx, item in enumerate(trending_api_list)}
         
         matched_trending = []
-        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
+        target_df = ticker_df if exclude_filters_trending else filtered_df
+        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in target_df.iterrows()}
         
         for ticker, rank_idx in trending_rank_map.items():
             if ticker in hist_lookup:
@@ -1546,9 +1578,10 @@ with tab5:
     st.markdown("### 🌙 BSJP (Beli Sore, Jual Pagi) Recommendations")
     st.caption("BSJP setups are ideally analyzed between 15:00 - 16:15 WIB before market close.")
     
-    if scored_list:
+    bsjp_source_list = scored_list_global if exclude_filters_bsjp else scored_list
+    if bsjp_source_list:
         bsjp_data = []
-        for s in scored_list:
+        for s in bsjp_source_list:
             hist_row = s["hist_row_obj"]
             raw_data = s["raw_data_obj"]
             
@@ -1632,9 +1665,10 @@ with tab6:
     st.markdown("### 📈 Mark Minervini Trend Template")
     st.caption("Validates tickers against Mark Minervini's legendary Stage 2 Uptrend criteria based on historical daily moving averages.")
     
-    if scored_list:
+    minervini_source_list = scored_list_global if exclude_filters_minervini else scored_list
+    if minervini_source_list:
         minervini_data = []
-        for s in scored_list:
+        for s in minervini_source_list:
             hist_row = s["hist_row_obj"]
             raw_data = s["raw_data_obj"]
             ticker = s["Ticker"]
