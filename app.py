@@ -881,6 +881,47 @@ with st.sidebar:
     st.markdown("## 🔍 Screener Settings")
     st.markdown("---")
     
+    # Auto refresh configuration
+    st.subheader("🔁 Auto Refresh")
+    auto_refresh_enabled = st.checkbox("Enable Auto Refresh", value=False, help="Automatically re-trigger scan cycle.")
+    if auto_refresh_enabled:
+        refresh_interval = st.selectbox(
+            "Interval (Minutes)",
+            options=[5, 10, 15, 30],
+            index=1,
+            help="Choose refresh period."
+        )
+        
+        # Inject standard JS metadata/trigger to auto-reload or utilize streamlit rerun schedule
+        # Simple metadata trick using st.session_state and a timestamp tracking
+        import time
+        if "next_refresh_time" not in st.session_state or st.session_state.get("last_refresh_interval") != refresh_interval:
+            st.session_state.next_refresh_time = time.time() + (refresh_interval * 60)
+            st.session_state.last_refresh_interval = refresh_interval
+            
+        time_left = int(st.session_state.next_refresh_time - time.time())
+        if time_left <= 0:
+            st.session_state.next_refresh_time = time.time() + (refresh_interval * 60)
+            # Rerun trigger
+            st.session_state["trigger_auto_scan"] = True
+        else:
+            st.info(f"⏳ Next auto-scan in: {time_left // 60}m {time_left % 60}s")
+            # Using st.empty with custom javascript to trigger page rerun after time_left seconds
+            st.components.v1.html(
+                f"""
+                <script>
+                window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
+                setTimeout(function() {{
+                    window.parent.location.reload();
+                }}, {time_left * 1000});
+                </script>
+                """,
+                height=0,
+                width=0
+            )
+            
+    st.markdown("---")
+    
     # Delay selector
     st.subheader("⏱️ Fetch Polling Delay")
     fetch_delay = st.slider(
@@ -1006,6 +1047,15 @@ with col_ref2:
         st.rerun()
 
 with col_info:
+    # Trigger auto refresh if scheduled
+    if st.session_state.get("trigger_auto_scan", False):
+        st.session_state["trigger_auto_scan"] = False
+        with st.spinner("⏳ Auto Refresh Triggered: Scanning multi-source feed..."):
+            live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay))
+            st.session_state.screener_data.update(live_results)
+            st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Auto Multi-Source)"
+        st.rerun()
+
     if st.session_state.last_fetch:
         st.caption(f"Last updated: {st.session_state.last_fetch} WIB.")
     else:
