@@ -433,7 +433,7 @@ def generate_analysis_panel(ticker: str, snapshot: OrderbookSnapshot) -> Panel:
                 d_freq_str = f"({'+' if d_freq > 0 else ''}{d_freq})" if d_freq != 0 else ""
                 
                 lot_part = f"[bold white]{lvl.lot:,}[/][{lot_color}]{d_lot_str}[/]" if d_lot != 0 else f"[bold white]{lvl.lot:,}[/]"
-                freq_part = f"[dim]({lvl.freq}[/{freq_color}]{d_freq_str}[dim])[/]" if d_freq != 0 else f"[dim]({lvl.freq})[/]"
+                freq_part = f"[dim]({lvl.freq}[/][{freq_color}]{d_freq_str}[/][dim])[/]" if d_freq != 0 else f"[dim]({lvl.freq})[/]"
                 bid_str = f"{lot_part} {freq_part}"
             else:
                 is_new = len(prev_bids_dict) > 0
@@ -465,7 +465,7 @@ def generate_analysis_panel(ticker: str, snapshot: OrderbookSnapshot) -> Panel:
                 d_freq_str = f"({'+' if d_freq > 0 else ''}{d_freq})" if d_freq != 0 else ""
                 
                 lot_part = f"[bold white]{lvl.lot:,}[/][{lot_color}]{d_lot_str}[/]" if d_lot != 0 else f"[bold white]{lvl.lot:,}[/]"
-                freq_part = f"[dim]({lvl.freq}[/{freq_color}]{d_freq_str}[dim])[/]" if d_freq != 0 else f"[dim]({lvl.freq})[/]"
+                freq_part = f"[dim]({lvl.freq}[/][{freq_color}]{d_freq_str}[/][dim])[/]" if d_freq != 0 else f"[dim]({lvl.freq})[/]"
                 ask_str = f"{lot_part} {freq_part}"
             else:
                 is_new = len(prev_asks_dict) > 0

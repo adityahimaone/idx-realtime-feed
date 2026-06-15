@@ -130,8 +130,9 @@ class SyncService:
             # Write to primary sheet (new - Realtime_Watchlist)
             try:
                 sheets_repository.write_snapshots(snapshots)
+                sheets_repository.update_rekomendasi_beli()
             except Exception as exc:
-                logger.error(f"📤 [bold red]Sheets[/bold red] | Primary write failed: {exc}")
+                logger.error(f"📤 [bold red]Sheets[/bold red] | Primary write/RB failed: {exc}")
 
             # Write to staging (MAS - Realtime_Watchlist [IRW])
             if config.MAS_STAGING_SPREADSHEET_ID:
@@ -151,8 +152,10 @@ class SyncService:
                         realtime_sheet_name=STAGING_SHEET_NAME,
                     )
                     logger.info("📤 [bold green]Staging[/bold green] | Updated Dashboard [IRW] + Dashboard Formula [IRW]")
+                    staging_repo.update_rekomendasi_beli(sheet_id=config.MAS_STAGING_SPREADSHEET_ID)
+                    logger.info("📤 [bold green]Staging[/bold green] | Updated Rekomendasi Beli [IRW]")
                 except Exception as exc:
-                    logger.error(f"📤 [bold red]Staging[/bold red] | Dashboard write failed: {exc}")
+                    logger.error(f"📤 [bold red]Staging[/bold red] | Dashboard/RB write failed: {exc}")
         else:
             logger.warning("⚠️ [bold yellow]No snapshots fetched this cycle[/bold yellow]")
             if self._consecutive_failures >= 3:

@@ -54,6 +54,12 @@ class OrderbookSnapshot(BaseModel):
     bid_levels: list[PriceLevel] = Field(default_factory=list)
     ask_levels: list[PriceLevel] = Field(default_factory=list)
 
+    prices: list[float] = Field(default_factory=list)
+    uma: bool = False
+    corp_action_active: bool = False
+    corp_action_text: str = ""
+    name: str = ""
+
     @property
     def total_bid_lot(self) -> int:
         return sum(level.lot for level in self.bid_levels)

@@ -120,6 +120,11 @@ async def run_once() -> None:
         change_val = int(float(item.get("change", 0.0) or 0.0))
         volume = float(item.get("volume", 0.0) or 0.0)
 
+        uma_val = bool(item.get("uma", False))
+        corp_action = item.get("corp_action") or {}
+        corp_act_active = bool(corp_action.get("active", False))
+        corp_act_text = str(corp_action.get("text", "")) if corp_act_active else ""
+
         snap = OrderbookSnapshot(
             ticker=symbol,
             timestamp=datetime.now(timezone.utc),
@@ -140,7 +145,12 @@ async def run_once() -> None:
             value=0.0,
             average_price=0.0,
             bid_levels=[],
-            ask_levels=[]
+            ask_levels=[],
+            prices=prices,
+            uma=uma_val,
+            corp_action_active=corp_act_active,
+            corp_action_text=corp_act_text,
+            name=item.get("name", "")
         )
         snapshots.append(snap)
         
@@ -183,8 +193,9 @@ async def run_once() -> None:
         # Write to primary sheet (Light Watchlist [IRW])
         try:
             sheets_repository.write_snapshots(snapshots, sheet_name=LIGHT_SHEET_NAME)
+            sheets_repository.update_rekomendasi_beli()
         except Exception as exc:
-            logger.error(f"📤 [bold red]Sheets[/bold red] | Primary write failed: {exc}")
+            logger.error(f"📤 [bold red]Sheets[/bold red] | Primary write/RB failed: {exc}")
 
         # Write to staging (MAS - Light Watchlist [IRW] + Dashboard calculations)
         if config.MAS_STAGING_SPREADSHEET_ID:
@@ -201,8 +212,10 @@ async def run_once() -> None:
                     realtime_sheet_name=LIGHT_SHEET_NAME,
                 )
                 logger.info("📤 [bold green]Staging[/bold green] | Updated Dashboard [IRW] + Dashboard Formula [IRW]")
+                sheets_repository.update_rekomendasi_beli(sheet_id=config.MAS_STAGING_SPREADSHEET_ID)
+                logger.info("📤 [bold green]Staging[/bold green] | Updated Rekomendasi Beli [IRW]")
             except Exception as exc:
-                logger.error(f"📤 [bold red]Staging[/bold red] | Dashboard write failed: {exc}")
+                logger.error(f"📤 [bold red]Staging[/bold red] | Dashboard/RB write failed: {exc}")
 
 
 async def run_forever() -> None:
