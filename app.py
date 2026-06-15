@@ -1402,8 +1402,8 @@ with tab3:
         st.info("Refresh the feed to display general screener results.")
 
 with tab4:
-    st.markdown("### 🔥 Trending Stocks Board (All Tickers & Stockbit Match)")
-    st.caption("Cross-references the All Tickers database with the live Stockbit Exodus Trending API list, displaying complete indicator breakdowns.")
+    st.markdown("### 🔥 Intraday Trending Stocks (All Tickers & Stockbit Match)")
+    st.caption("Cross-references the database with live Stockbit Exodus Trending API list, calculating a 5-point Momentum Score.")
     
     with st.spinner("⚡ Fetching live trending list from Stockbit API..."):
         trending_api_list = asyncio.run(fetch_stockbit_trending())
@@ -1420,53 +1420,83 @@ with tab4:
                 raw_data = s["raw_data_obj"]
                 
                 # Fetch live values
-                last = s["Live Price"]
+                current_price = s["Live Price"]
                 prev_close = safe_float(hist_row.get("ClosePrev", 0))
                 if prev_close <= 0:
-                    prev_close = last
-                
-                vol_today = safe_float(raw_data.get("volume", 0))
-                vol_avg20d = safe_float(hist_row.get("Vol_Avg", 0))
-                
-                freq_today = safe_float(raw_data.get("frequency", 0))
-                freq_avg20d = safe_float(hist_row.get("Freq_Avg", 1000))
-                if freq_avg20d <= 0:
-                    freq_avg20d = 1000
+                    prev_close = current_price
                     
-                val_today = safe_float(raw_data.get("value", 0))
-                val_avg20d = safe_float(hist_row.get("Val_Avg", 100000000))
+                open_price = safe_float(raw_data.get("open", current_price))
+                if open_price <= 0:
+                    open_price = prev_close
+                    
+                high = safe_float(raw_data.get("high", current_price))
+                low = safe_float(raw_data.get("low", current_price))
+                volume = safe_float(raw_data.get("volume", 0))
+                avg_vol20 = safe_float(hist_row.get("Vol_Avg", 1))
+                if avg_vol20 <= 0:
+                    avg_vol20 = 1.0
+
+                # 1. Price Change % (Intraday vs Open)
+                change_pct = ((current_price - open_price) / open_price * 100) if open_price > 0 else 0.0
                 
-                f_buy = safe_float(raw_data.get("foreign_buy", 0))
-                f_sell = safe_float(raw_data.get("foreign_sell", 0))
-                net_foreign = f_buy - f_sell
+                # 2. Relative Volume
+                rvol = volume / avg_vol20
                 
-                vsr = vol_today / vol_avg20d if vol_avg20d > 0 else 1.0
-                price_change = ((last - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
-                fsr = freq_today / freq_avg20d
+                # 3. Position in Daily Range (0-1)
+                range_position = (
+                    (current_price - low) / (high - low)
+                    if high != low else 0.0
+                )
                 
-                # VSR Status Interpretation
-                if vsr > 10.0:
-                    vsr_label = "Extreme ⚠"
-                elif vsr >= 5.0:
-                    vsr_label = "Trending 🔥"
-                elif vsr >= 2.0:
-                    vsr_label = "Radar ⚡"
+                # 4. Approx VWAP (using Typical Price approximation)
+                typical_price = (high + low + current_price) / 3
+                # For single timeframe fallback, typical price serves as a direct proxy for VWAP
+                vwap = typical_price
+                
+                # 5. Transaction Value
+                value = current_price * volume * 100 # assuming lot multiplier
+                
+                # 6. Breakout Conditions
+                breakout_high = current_price >= (high * 0.995)
+                above_vwap = current_price > vwap
+                
+                # Momentum Score (out of 5)
+                momentum_score = 0
+                if change_pct > 3.0:
+                    momentum_score += 1
+                if rvol > 2.0:
+                    momentum_score += 1
+                if above_vwap:
+                    momentum_score += 1
+                if range_position > 0.8:
+                    momentum_score += 1
+                if breakout_high:
+                    momentum_score += 1
+                    
+                # Interpretation labels
+                if momentum_score == 5:
+                    trend_status = "Very Strong 🔥"
+                elif momentum_score == 4:
+                    trend_status = "Strong Candidate ⚡"
+                elif momentum_score == 3:
+                    trend_status = "Watchlist 👁️"
                 else:
-                    vsr_label = "Normal"
-                    
+                    trend_status = "Ignore"
+                
                 matched_trending.append({
                     "Stockbit Rank": trending_rank_map[ticker],
                     "Ticker": ticker,
                     "Company Name": s["Company Name"],
-                    "Live Price": last,
-                    "Change %": price_change,
-                    "VSR": vsr,
-                    "VSR Status": vsr_label,
-                    "Freq Surge": fsr,
-                    "Value Today": val_today,
-                    "Net Foreign (Lot)": net_foreign,
-                    "Intraday Score": s["Intraday Score"],
-                    "Live Signal": s["Live Signal"]
+                    "Price": current_price,
+                    "Change %": change_pct,
+                    "RVol": rvol,
+                    "Range Position": range_position,
+                    "Above VWAP": "✅" if above_vwap else "❌",
+                    "Near High": "✅" if breakout_high else "❌",
+                    "Value (IDR)": value,
+                    "Momentum Score": f"{momentum_score}/5",
+                    "Trend Status": trend_status,
+                    "score_int": momentum_score
                 })
                 
         if matched_trending:
@@ -1476,18 +1506,13 @@ with tab4:
                 matched_df,
                 column_config={
                     "Stockbit Rank": st.column_config.NumberColumn("Stockbit Rank", format="%d"),
-                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
-                    "VSR": st.column_config.NumberColumn("VSR", format="%.2f x"),
-                    "Freq Surge": st.column_config.NumberColumn("Freq Surge", format="%.2f x"),
-                    "Value Today": st.column_config.NumberColumn("Value (IDR)", format="Rp %d"),
-                    "Net Foreign (Lot)": st.column_config.NumberColumn("Net Foreign (Lot)", format="%+d"),
-                    "Intraday Score": st.column_config.ProgressColumn(
-                        "Intraday Score",
-                        min_value=0,
-                        max_value=100,
-                        format="%d"
-                    )
+                    "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
+                    "Change %": st.column_config.NumberColumn("Change % (Open)", format="%+.2f%%"),
+                    "RVol": st.column_config.NumberColumn("RVol", format="%.2f x"),
+                    "Range Position": st.column_config.NumberColumn("Range Pos", format="%.2f"),
+                    "Value (IDR)": st.column_config.NumberColumn("Value Today", format="Rp %d"),
+                    "Momentum Score": st.column_config.TextColumn("Score"),
+                    "Trend Status": st.column_config.TextColumn("Status Summary"),
                 },
                 use_container_width=True,
                 hide_index=True
