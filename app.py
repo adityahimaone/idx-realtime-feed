@@ -1402,7 +1402,7 @@ with tab3:
         st.info("Refresh the feed to display general screener results.")
 
 with tab4:
-    st.markdown("### 🔥 Intraday Trending Stocks (All Tickers & Stockbit Match)")
+    st.markdown("### 🔥 Trending Stocks")
     st.caption("Cross-references the database with live Stockbit Exodus Trending API list, calculating a 5-point Momentum Score.")
     
     with st.spinner("⚡ Fetching live trending list from Stockbit API..."):
