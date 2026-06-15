@@ -2129,7 +2129,8 @@ with tab3:
     render_tab3(scored_list)
 
 with tab4:
-    render_tab4(ticker_df, scored_list)
+    trending_source_list = scored_list_global if exclude_filters_trending else scored_list
+    render_tab4(ticker_df, trending_source_list)
 
 # ============================================================================
 # TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
