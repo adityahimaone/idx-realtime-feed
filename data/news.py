@@ -469,7 +469,10 @@ def build_ticker_impact_table_v2(
         snippet = art["title"][:60] + ("…" if len(art["title"]) > 60 else "")
         created_display = art.get("created_display", "")
         time_str = f" [{created_display}]" if created_display else ""
-        art_ts = art.get("ts", 0)
+        try:
+            art_ts = int(float(art.get("ts", 0) or 0))
+        except (ValueError, TypeError):
+            art_ts = 0
         
         # Scan watchlist for relevance to avoid false-positives
         scan_list = watchlist_tickers if watchlist_tickers else []
