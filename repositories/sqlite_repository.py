@@ -40,6 +40,48 @@ CREATE TABLE IF NOT EXISTS portfolio (
     buy_price REAL NOT NULL,
     lots INTEGER NOT NULL
 );
+
+-- orderbook_snapshots: bahan multi-snapshot delta tracking
+CREATE TABLE IF NOT EXISTS orderbook_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    captured_at TEXT NOT NULL,     -- ISO8601 WIB
+    side TEXT NOT NULL,            -- 'bid' | 'ask'
+    price REAL NOT NULL,
+    lot INTEGER NOT NULL,
+    freq INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ob_ticker_time ON orderbook_snapshots(ticker, captured_at);
+
+-- scan_history: bahan backtest & auto-journal
+CREATE TABLE IF NOT EXISTS scan_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    price REAL,
+    intraday_score INTEGER,
+    signal TEXT,
+    source TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_scan_ticker_time ON scan_history(ticker, captured_at);
+
+-- sentiment_cache: caching LLM analysis per title hash
+CREATE TABLE IF NOT EXISTS sentiment_cache (
+    title_hash TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- persisted_news: news persistence for 7 days
+CREATE TABLE IF NOT EXISTS persisted_news (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL,
+    ts REAL NOT NULL,
+    link TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_news_ts ON persisted_news(ts);
 """
 
 
@@ -125,6 +167,117 @@ class SQLiteRepository:
     def clear_portfolio(self) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM portfolio")
+
+    # Orderbook Snapshots Persistent Methods
+    def save_orderbook_snapshot(self, ticker: str, side: str, price: float, lot: int, freq: int = 0) -> None:
+        import datetime
+        now = datetime.datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO orderbook_snapshots (ticker, captured_at, side, price, lot, freq)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (ticker.upper().strip(), now, side, price, lot, freq)
+            )
+
+    def get_latest_orderbook_snapshots(self, ticker: str, limit: int = 20) -> list[dict]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT side, price, lot, freq, captured_at FROM orderbook_snapshots
+                WHERE ticker = ?
+                ORDER BY captured_at DESC, price ASC
+                LIMIT ?
+                """,
+                (ticker.upper().strip(), limit)
+            )
+            return [
+                {"side": row[0], "price": row[1], "lot": row[2], "freq": row[3], "captured_at": row[4]}
+                for row in cursor.fetchall()
+            ]
+
+    # Scan History Persistent Methods
+    def save_scan_history(self, ticker: str, price: float, intraday_score: int, signal: str, source: str) -> None:
+        import datetime
+        now = datetime.datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO scan_history (ticker, captured_at, price, intraday_score, signal, source)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (ticker.upper().strip(), now, price, intraday_score, signal, source)
+            )
+
+    def get_scan_history(self, ticker: str, minutes_ago: int = 15) -> list[dict]:
+        import datetime
+        t = (datetime.datetime.now() - datetime.timedelta(minutes=minutes_ago)).isoformat()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT price, intraday_score, signal, captured_at FROM scan_history
+                WHERE ticker = ? AND captured_at >= ?
+                ORDER BY captured_at DESC
+                """,
+                (ticker.upper().strip(), t)
+            )
+            return [
+                {"price": row[0], "intraday_score": row[1], "signal": row[2], "captured_at": row[3]}
+                for row in cursor.fetchall()
+            ]
+
+    # Sentiment Cache Methods
+    def get_cached_sentiment(self, title_hash: str) -> str | None:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT label FROM sentiment_cache WHERE title_hash = ?", (title_hash,)
+            )
+            row = cursor.fetchone()
+            return row[0] if row else None
+
+    def save_cached_sentiment(self, title_hash: str, label: str) -> None:
+        import datetime
+        now = datetime.datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO sentiment_cache (title_hash, label, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (title_hash, label, now)
+            )
+
+    # Persisted News Methods (7 days persistence)
+    def save_news_articles(self, articles: list[dict]) -> None:
+        import datetime
+        now = datetime.datetime.now().isoformat()
+        with self._connect() as conn:
+            for art in articles:
+                art_id = art.get("id") or str(hash(art["title"] + str(art.get("ts", 0))))
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO persisted_news (id, title, source, ts, link, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (art_id, art["title"], art["source"], art.get("ts", 0.0), art.get("link", ""), now)
+                )
+
+    def get_persisted_news(self) -> list[dict]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "SELECT title, source, ts, link FROM persisted_news ORDER BY ts DESC"
+            )
+            return [
+                {"title": row[0], "source": row[1], "ts": row[2], "link": row[3]}
+                for row in cursor.fetchall()
+            ]
+
+    def prune_old_news(self, days: int = 7) -> None:
+        import time
+        limit_ts = time.time() - (days * 24 * 3600)
+        with self._connect() as conn:
+            conn.execute("DELETE FROM persisted_news WHERE ts < ?", (limit_ts,))
 
 
 sqlite_repository = SQLiteRepository()

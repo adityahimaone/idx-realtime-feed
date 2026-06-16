@@ -18,10 +18,30 @@ def compute_intraday_score(data, hist_row) -> dict:
     else:
         vol_score = 20
 
-    imbalance_score = 60
-    spread_score = 60
+    # --- GANTI hardcoded 60/60 dengan proxy dari data yang sudah ada ---
+    fb = safe_float(data.get("foreign_buy", 0))
+    fs = safe_float(data.get("foreign_sell", 0))
+    net_foreign_ratio = fb / max(fs, 1.0)
+    if net_foreign_ratio >= 3.0:
+        imbalance_score = 100
+    elif net_foreign_ratio >= 2.0:
+        imbalance_score = 80
+    elif net_foreign_ratio >= 1.2:
+        imbalance_score = 65
+    elif net_foreign_ratio >= 0.8:
+        imbalance_score = 50
+    else:
+        imbalance_score = 30
 
+    high = safe_float(data.get("high", 0))
+    low  = safe_float(data.get("low", 0))
     last = safe_float(data.get("last", 0))
+    if high > low:
+        price_pos = (last - low) / (high - low)
+        spread_score = round(40 + price_pos * 60, 1)   # posisi di range hari ini sbg proxy buying pressure
+    else:
+        spread_score = 60   # fallback kalau data range tidak tersedia
+
     prev = safe_float(data.get("prev_close", 0))
     chg = ((last - prev) / prev * 100) if prev > 0 else 0.0
 
@@ -116,8 +136,8 @@ def calculate_strategies(price: float, score: int, signal: str) -> dict:
 
     tick_size = get_tick_size(price)
     entry_mod = price - 2 * tick_size
-    tp_mod = entry_mod * 1.05
-    sl_mod = entry_mod * 0.93
+    tp_mod = entry_mod * 1.06
+    sl_mod = entry_mod * 0.97
 
     entry_low = price - 4 * tick_size
     tp_low = entry_low * 1.08
@@ -160,6 +180,7 @@ def minify_html(html_str: str) -> str:
 def trending_score(sig: dict) -> float:
     """
     Hitung Trending Score 0–100 dari sinyal intraday IDX.
+    Stockbit methodology reconstruction.
     Return 0.0 jika tidak lolos pre-filter.
 
     sig keys required:
@@ -170,10 +191,14 @@ def trending_score(sig: dict) -> float:
         net_foreign   : ForeignBuy - ForeignSell (lots)
         freq          : raw frequency count today
         value_rp      : raw transaction value today (Rupiah)
-    """
-    MAX = {"vsr": 10, "freq_surge": 10, "chg": 10, "val_surge": 5, "net_f": 500_000}
 
-    # Pre-filter (relaxed)
+    Weights (Stockbit reconstruction):
+        VSR        40%  — volume surge primary signal
+        FreqSurge  25%  — frequency surge proxy for social activity
+        Change%    20%  — price momentum
+        NFR        15%  — net foreign ratio (asing masuk/keluar)
+    """
+    # Pre-filter (relaxed thresholds)
     if sig.get("vsr", 0) < 1.2:
         return 0.0
     if abs(sig.get("change_pct", 0)) < 0.3:
@@ -186,12 +211,16 @@ def trending_score(sig: dict) -> float:
     def n(val, cap):
         return min(abs(val) / cap, 1.0)
 
+    # NFR = net_foreign / volume_total * 100 — cap at 20%
+    volume_total = sig.get("volume_total", 0) or sig.get("freq", 0) * 500 or 1
+    raw_nf = sig.get("net_foreign", 0)
+    nfr = (raw_nf / volume_total * 100) if volume_total > 0 else 0.0
+
     score = (
-        n(sig.get("vsr", 0),         MAX["vsr"])        * 0.35 +
-        n(sig.get("freq_surge", 0),  MAX["freq_surge"]) * 0.25 +
-        n(sig.get("change_pct", 0),  MAX["chg"])        * 0.20 +
-        n(sig.get("val_surge", 0),   MAX["val_surge"])  * 0.15 +
-        n(sig.get("net_foreign", 0), MAX["net_f"])      * 0.10
+        n(sig.get("vsr", 0),        10) * 0.40 +
+        n(sig.get("freq_surge", 0), 10) * 0.25 +
+        n(sig.get("change_pct", 0), 10) * 0.20 +
+        n(max(nfr, 0),              20) * 0.15
     )
     return round(score * 100, 1)
 

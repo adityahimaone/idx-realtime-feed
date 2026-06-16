@@ -10,7 +10,7 @@ def render_tab3(scored_list):
 
     if not scored_list:
         st.info("Refresh the feed to display screener results.")
-        return
+        return [], [], []
 
     scored_df = pd.DataFrame(scored_list)
     scored_df = scored_df.sort_values(by="Intraday Score", ascending=False)
@@ -227,3 +227,5 @@ def render_tab3(scored_list):
         )
     else:
         st.caption("No long-term candidates pass filter right now.")
+
+    return scalp_rows, swing_rows, lt_rows

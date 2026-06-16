@@ -230,9 +230,23 @@ def fetch_news_for_tickers(ticker_list):
                 tl = title.lower()
                 sentiment += sum(1 for kw in positive_kw if kw in tl)
                 sentiment -= sum(1 for kw in negative_kw if kw in tl)
+            
+            pub_ts = news[0].get("providerPublishTime", 0)
+            latest_time = ""
+            if pub_ts:
+                try:
+                    import pytz
+                    import datetime as dt
+                    WIB = pytz.timezone("Asia/Jakarta")
+                    dt_wib = dt.datetime.fromtimestamp(pub_ts, tz=WIB)
+                    latest_time = dt_wib.strftime("%d %b %H:%M WIB")
+                except Exception:
+                    pass
+
             results[ticker] = {
                 "count": len(headlines),
                 "latest": headlines[0],
+                "latest_time": latest_time,
                 "sentiment": sentiment / len(headlines),
             }
         except Exception:

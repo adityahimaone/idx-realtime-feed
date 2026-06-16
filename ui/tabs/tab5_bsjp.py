@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 from data.fetchers import safe_float
+from data.pre_ara import get_ara_limit
 
 
 def render_tab5(scored_list_global, scored_list, exclude_filters_bsjp):
-    """Render Tab 5: BSJP (Beli Sore, Jual Pagi) Recommendations"""
+    """Render Tab 5: BSJP (Beli Sore, Jual Pagi) Recommendations with ARA limit filter and Foreign Flow Integration"""
     st.markdown("### 🌙 BSJP (Beli Sore, Jual Pagi) Recommendations")
     st.caption("BSJP setups are ideally analyzed between 15:00 - 16:15 WIB before market close.")
     
@@ -32,13 +33,39 @@ def render_tab5(scored_list_global, scored_list, exclude_filters_bsjp):
             day_range = high - low
             price_pos = (price - low) / day_range if day_range > 0 else 1.0
             
-            if chg > 1.0 and price_pos >= 0.7:
+            # BSJP gate: avoid buying if already too close to ARA (e.g. used > 85% of ARA limit)
+            prev_close = safe_float(raw_data.get("prev_close", 0)) or safe_float(hist_row.get("ClosePrev", price))
+            ara_limit_pct = get_ara_limit(prev_close)
+            ara_used_pct = (chg / ara_limit_pct * 100) if ara_limit_pct > 0 else 0.0
+            
+            if chg > 1.0 and price_pos >= 0.70 and ara_used_pct < 85:
                 tp = round(resistance, 2)
                 sl = round(max(support, price * 0.97), 2)
                 rr = (tp - price) / max(1.0, price - sl)
                 
                 vsr = safe_float(raw_data.get("volume", 0)) / safe_float(hist_row.get("Vol_Avg", 1)) if safe_float(hist_row.get("Vol_Avg", 1)) > 0 else 1.0
-                setup_score = int(round(s["Intraday Score"] * 0.7 + min(100, vsr * 20) * 0.3))
+                
+                # Incorporate foreign flow confirmation proxy
+                fb = safe_float(raw_data.get("foreign_buy", 0))
+                fs = safe_float(raw_data.get("foreign_sell", 0))
+                net_foreign_ratio = fb / max(fs, 1.0)
+                if net_foreign_ratio >= 3.0:
+                    foreign_flow_score = 100
+                elif net_foreign_ratio >= 2.0:
+                    foreign_flow_score = 80
+                elif net_foreign_ratio >= 1.2:
+                    foreign_flow_score = 65
+                elif net_foreign_ratio >= 0.8:
+                    foreign_flow_score = 50
+                else:
+                    foreign_flow_score = 30
+
+                setup_score = int(round(
+                    0.45 * s["Intraday Score"]
+                    + 0.20 * min(100, vsr * 20)
+                    + 0.20 * foreign_flow_score
+                    + 0.15 * (price_pos * 100)
+                ))
                 
                 if rr >= 1.2 and setup_score >= 60:
                     bsjp_data.append({
@@ -71,7 +98,9 @@ def render_tab5(scored_list_global, scored_list, exclude_filters_bsjp):
                 use_container_width=True,
                 hide_index=True
             )
+            return bsjp_data
         else:
-            st.info("No tickers currently match standard BSJP setups (Positive change > 1%, closing in upper 30% of day's range, R/R >= 1.2x).")
+            st.info("No tickers currently match standard BSJP setups (Positive change > 1%, closing in upper 30% of day's range, R/R >= 1.2x, not too close to ARA).")
     else:
         st.info("Refresh the live feed to display BSJP setups.")
+    return []

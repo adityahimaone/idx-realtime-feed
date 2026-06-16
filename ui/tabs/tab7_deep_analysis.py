@@ -3,15 +3,17 @@ import pandas as pd
 import asyncio
 from datetime import datetime
 from data.fetchers import safe_float, fetch_stockbit_detail
-from data.scoring import compute_intraday_score, calculate_strategies
+from data.scoring import compute_intraday_score
+from data.orderbook_wall import detect_walls, track_delta, grounded_three_tier, OrderbookLevel
+from repositories.sqlite_repository import sqlite_repository
 
 WIB = __import__("pytz").timezone("Asia/Jakarta")
 
 
 def render_tab7(ticker_df, scored_list):
-    """Render Tab 7: Deep Stock Analysis (Exodus API)"""
+    """Render Tab 7: Deep Stock Analysis (Exodus API) with Wall Detection & Delta Tracking"""
     st.markdown("### 🔍 Deep Stock Analysis (Exodus API)")
-    st.caption("Fetches real-time bid/ask queue details and company statistics from unofficial Stockbit Exodus API.")
+    st.caption("Fetches real-time bid/ask queue details, detects walls, and tracks multi-snapshot deltas using SQLite history.")
     
     if scored_list:
         if "deep_analyzed_ticker" not in st.session_state:
@@ -55,9 +57,43 @@ def render_tab7(ticker_df, scored_list):
                     snap = asyncio.run(fetch_stockbit_detail(selected_detail))
                     
                 if snap:
-                    score_data = compute_intraday_score(raw_data_obj, hist_row)
-                    strategies = calculate_strategies(snap.last_price, score_data["score"], score_data["signal"])
+                    # Save snapshot levels to SQLite for delta tracking
+                    for lvl in snap.bid_levels:
+                        sqlite_repository.save_orderbook_snapshot(selected_detail, "bid", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
+                    for lvl in snap.ask_levels:
+                        sqlite_repository.save_orderbook_snapshot(selected_detail, "ask", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
+
+                    # Fetch previous snapshots from SQLite for delta analysis
+                    history = sqlite_repository.get_latest_orderbook_snapshots(selected_detail, limit=40)
+                    # Simple reconstruction of previous snapshot levels
+                    prev_bids = []
+                    prev_asks = []
+                    seen_timestamps = sorted(list(set(r["captured_at"] for r in history)), reverse=True)
+                    if len(seen_timestamps) > 1:
+                        prev_ts = seen_timestamps[1] # the second newest timestamp is the previous refresh
+                        for r in history:
+                            if r["captured_at"] == prev_ts:
+                                lvl = OrderbookLevel(price=r["price"], lot=r["lot"], freq=r["freq"])
+                                if r["side"] == "bid":
+                                    prev_bids.append(lvl)
+                                else:
+                                    prev_asks.append(lvl)
+
+                    # Wall Detection
+                    curr_bids = [OrderbookLevel(price=lvl.price, lot=lvl.lot, freq=getattr(lvl, 'freq', 0)) for lvl in snap.bid_levels]
+                    curr_asks = [OrderbookLevel(price=lvl.price, lot=lvl.lot, freq=getattr(lvl, 'freq', 0)) for lvl in snap.ask_levels]
                     
+                    bid_walls = detect_walls(curr_bids, "bid")
+                    ask_walls = detect_walls(curr_asks, "ask")
+
+                    # Delta Tracking
+                    bid_deltas = track_delta(prev_bids, curr_bids, snap.last_price, "bid")
+                    ask_deltas = track_delta(prev_asks, curr_asks, snap.last_price, "ask")
+
+                    # Grounded 3-Tier Strategies
+                    strategies = grounded_three_tier(snap.last_price, bid_walls, ask_walls)
+                    score_data = compute_intraday_score(raw_data_obj, hist_row)
+
                     c1, c2, c3, c4 = st.columns(4)
                     with c1:
                         st.markdown(f"""
@@ -96,7 +132,7 @@ def render_tab7(ticker_df, scored_list):
                         """, unsafe_allow_html=True)
                     
                     # 3-Tier Strategies
-                    st.markdown("### 🎯 3-Tier Execution Strategies")
+                    st.markdown("### 🎯 Grounded 3-Tier Execution Strategies (Orderbook Based)")
                     sc1, sc2, sc3 = st.columns(3)
                     with sc1:
                         st.markdown(f"""
@@ -104,10 +140,9 @@ def render_tab7(ticker_df, scored_list):
                             <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
                             <ul>
                                 <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Aggressive']['target']:,.0f} (+10%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Aggressive']['sl']:,.0f} (-5%)</li>
+                                <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
+                                <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Aggressive']['size']}</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -116,11 +151,10 @@ def render_tab7(ticker_df, scored_list):
                         <div class="strategy-card">
                             <h3 style="color: #FFFF00">⚡ Moderate (Pullback Play)</h3>
                             <ul>
-                                <li><b>Entry:</b> IDR {strategies['Moderate']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Moderate']['target']:,.0f} (+5%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Moderate']['sl']:,.0f} (-7%)</li>
-                                <li><b>R/R Ratio:</b> {strategies['Moderate']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Moderate']['size']}</li>
+                                <li><b>Entry:</b> IDR {strategies['Moderat']['entry']:,.0f}</li>
+                                <li><b>Target (TP):</b> IDR {strategies['Moderat']['tp']:,.0f}</li>
+                                <li><b>Stop Loss (SL):</b> IDR {strategies['Moderat']['sl']:,.0f}</li>
+                                <li><b>R/R Ratio:</b> {strategies['Moderat']['rr']}x</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -130,13 +164,39 @@ def render_tab7(ticker_df, scored_list):
                             <h3 style="color: #00D4AA">🛡️ Low Risk (Support Buy)</h3>
                             <ul>
                                 <li><b>Entry:</b> IDR {strategies['Low Risk']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Low Risk']['target']:,.0f} (+3%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Low Risk']['sl']:,.0f} (-2%)</li>
+                                <li><b>Target (TP):</b> IDR {strategies['Low Risk']['tp']:,.0f}</li>
+                                <li><b>Stop Loss (SL):</b> IDR {strategies['Low Risk']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Low Risk']['size']}</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
+
+                    # Display Walls and Deltas
+                    st.markdown("### 🧱 Orderbook Wall & Delta Signals")
+                    wc1, wc2 = st.columns(2)
+                    with wc1:
+                        st.markdown("#### Buy Wall / Bid Deltas")
+                        bid_wall_df = pd.DataFrame([{"Price": w.price, "Lot": w.lot, "Strength": f"{w.strength}%"} for w in bid_walls])
+                        if not bid_wall_df.empty:
+                            st.dataframe(bid_wall_df, use_container_width=True)
+                        else:
+                            st.caption("No significant bid walls detected.")
+                        
+                        bid_delta_df = pd.DataFrame([{"Price": d.price, "Delta Lot": d.lot, "Type": d.classification, "Strength": f"{d.strength}%"} for d in bid_deltas])
+                        if not bid_delta_df.empty:
+                            st.dataframe(bid_delta_df, use_container_width=True)
+
+                    with wc2:
+                        st.markdown("#### Sell Wall / Ask Deltas")
+                        ask_wall_df = pd.DataFrame([{"Price": w.price, "Lot": w.lot, "Strength": f"{w.strength}%"} for w in ask_walls])
+                        if not ask_wall_df.empty:
+                            st.dataframe(ask_wall_df, use_container_width=True)
+                        else:
+                            st.caption("No significant ask walls detected.")
+
+                        ask_delta_df = pd.DataFrame([{"Price": d.price, "Delta Lot": d.lot, "Type": d.classification, "Strength": f"{d.strength}%"} for d in ask_deltas])
+                        if not ask_delta_df.empty:
+                            st.dataframe(ask_delta_df, use_container_width=True)
 
                     # Live Orderbook
                     st.markdown("### 📥 Live Orderbook Depth (Exodus API)")

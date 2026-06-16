@@ -141,6 +141,9 @@ def fetch_macro_news_yfinance() -> list:
     """Fetch macro-relevant headlines from yfinance."""
     macro_queries = ["^JKSE", "IDR=X", "GC=F", "CL=F"]
     articles = []
+    import pytz
+    import datetime as dt
+    WIB = pytz.timezone("Asia/Jakarta")
     for symbol in macro_queries:
         try:
             t = yf.Ticker(symbol)
@@ -150,7 +153,18 @@ def fetch_macro_news_yfinance() -> list:
                 link = item.get("link", "")
                 pub_ts = item.get("providerPublishTime", 0)
                 if title:
-                    articles.append({"title": title, "link": link, "source": symbol, "ts": pub_ts})
+                    try:
+                        dt_wib = dt.datetime.fromtimestamp(pub_ts, tz=WIB)
+                        created_display = dt_wib.strftime("%d %b %H:%M WIB")
+                    except Exception:
+                        created_display = ""
+                    articles.append({
+                        "title": title,
+                        "link": link,
+                        "source": symbol,
+                        "ts": pub_ts,
+                        "created_display": created_display
+                    })
         except Exception:
             pass
     seen = set()
@@ -422,6 +436,8 @@ def build_ticker_impact_table_v2(
                 e = impact_map.setdefault(t, {
                     "macro_pos": [], "macro_neg": [],
                     "mention_pos": [], "mention_neg": [],
+                    "latest_ts": 0,
+                    "latest_time": "-",
                 })
                 e["macro_pos"].append(theme["label"])
         for t in theme["negative_tickers"]:
@@ -429,34 +445,49 @@ def build_ticker_impact_table_v2(
                 e = impact_map.setdefault(t, {
                     "macro_pos": [], "macro_neg": [],
                     "mention_pos": [], "mention_neg": [],
+                    "latest_ts": 0,
+                    "latest_time": "-",
                 })
                 e["macro_neg"].append(theme["label"])
 
     # Layer 2: direct ticker mention in headlines
-    known_macros = {"IHSG", "BI", "LQ45", "IDX", "COMPOSITE"}
+    from data.sentiment import _score_headline, is_relevant_to_ticker
+    
+    # Pre-lookup company name maps to avoid false positives
+    ticker_company_map = {}
+    if watchlist_tickers:
+        # Match from active sheet registry or database if available
+        # But we can fall back to ticker code matching directly
+        pass
+
     for art in all_articles:
-        topics = art.get("topics") or []
-        emiten = [t for t in topics
-                  if len(t) == 4 and t.isalpha() and t.upper() not in known_macros]
-        if not emiten:
-            continue
         title_l = art["title"].lower()
-        pos_hit = sum(1 for kw in pos_kw if kw in title_l)
-        neg_hit = sum(1 for kw in neg_kw if kw in title_l)
-        if pos_hit == neg_hit:
-            continue  # neutral — skip
+        score = _score_headline(art["title"])
+        if score == 0.0:
+            continue
         source_label = art.get("source", "news").upper()
         snippet = art["title"][:60] + ("…" if len(art["title"]) > 60 else "")
-        for t in emiten:
-            if not watchlist_tickers or t in watchlist_tickers:
+        created_display = art.get("created_display", "")
+        time_str = f" [{created_display}]" if created_display else ""
+        art_ts = art.get("ts", 0)
+        
+        # Scan watchlist for relevance to avoid false-positives
+        scan_list = watchlist_tickers if watchlist_tickers else []
+        for t in scan_list:
+            if is_relevant_to_ticker(art["title"], t):
                 e = impact_map.setdefault(t, {
                     "macro_pos": [], "macro_neg": [],
                     "mention_pos": [], "mention_neg": [],
+                    "latest_ts": 0,
+                    "latest_time": "-",
                 })
-                if pos_hit > neg_hit:
-                    e["mention_pos"].append(f"[{source_label}] {snippet}")
-                else:
-                    e["mention_neg"].append(f"[{source_label}] {snippet}")
+                if art_ts > e["latest_ts"]:
+                    e["latest_ts"] = art_ts
+                    e["latest_time"] = created_display or "-"
+                if score > 0:
+                    e["mention_pos"].append(f"[{source_label}]{time_str} {snippet}")
+                elif score < 0:
+                    e["mention_neg"].append(f"[{source_label}]{time_str} {snippet}")
 
     rows = []
     for ticker, e in impact_map.items():
@@ -472,6 +503,7 @@ def build_ticker_impact_table_v2(
             "Macro -": ", ".join(e["macro_neg"]) if e["macro_neg"] else "-",
             "Mention +": f"{len(e['mention_pos'])} headline(s)" if e["mention_pos"] else "-",
             "Mention -": f"{len(e['mention_neg'])} headline(s)" if e["mention_neg"] else "-",
+            "Latest Mention": e["latest_time"],
             "_mention_pos_detail": e["mention_pos"],
             "_mention_neg_detail": e["mention_neg"],
         })
@@ -497,39 +529,30 @@ def build_per_ticker_sentiment(
     Returns:
         list of dicts sorted by combined_score desc
     """
-    pos_kw = ["naik", "tumbuh", "laba", "positif", "dividen", "akuisisi",
-              "ekspansi", "profit", "growth", "rise", "gain", "upgrade",
-              "bullish", "lunasi", "raih", "rekor", "surplus", "bangkit"]
-    neg_kw = ["turun", "rugi", "gagal", "krisis", "utang", "debt", "loss",
-              "downgrade", "bearish", "crash", "tunda", "henti", "anjlok",
-              "merugi", "default", "sanksi", "protes", "ancam", "pailit"]
-    known_macros = {"IHSG", "BI", "LQ45", "IDX", "COMPOSITE"}
+    from data.sentiment import _score_headline, is_relevant_to_ticker
+    from data.fetchers import safe_float
 
     # Build mention map from all_articles
     mention_map: dict[str, dict] = {}
     for art in all_articles:
-        topics = art.get("topics") or []
-        emiten = [t for t in topics
-                  if len(t) == 4 and t.isalpha() and t.upper() not in known_macros]
-        for t in emiten:
-            if watchlist_tickers and t not in watchlist_tickers:
-                continue
-            title_l = art["title"].lower()
-            pos_hit = sum(1 for kw in pos_kw if kw in title_l)
-            neg_hit = sum(1 for kw in neg_kw if kw in title_l)
-            score = pos_hit - neg_hit
-            m = mention_map.setdefault(t, {
-                "count": 0, "score": 0, "headlines": [], "sources": set()
-            })
-            m["count"] += 1
-            m["score"] += score
-            m["sources"].add(art.get("source", "?"))
-            if len(m["headlines"]) < 3:
-                m["headlines"].append({
-                    "title": art["title"],
-                    "link": art.get("link", ""),
-                    "source": art.get("source", ""),
+        for t in (watchlist_tickers or []):
+            if is_relevant_to_ticker(art["title"], t):
+                score = _score_headline(art["title"])
+                if score == 0.0:
+                    continue
+                m = mention_map.setdefault(t, {
+                    "count": 0, "score": 0.0, "headlines": [], "sources": set()
                 })
+                m["count"] += 1
+                m["score"] += score
+                m["sources"].add(art.get("source", "?"))
+                if len(m["headlines"]) < 3:
+                    m["headlines"].append({
+                        "title": art["title"],
+                        "link": art.get("link", ""),
+                        "source": art.get("source", ""),
+                        "created_display": art.get("created_display", ""),
+                    })
 
     rows = []
     all_tickers = set(watchlist_tickers or []) | set(yfinance_data.keys()) | set(mention_map.keys())
@@ -539,20 +562,23 @@ def build_per_ticker_sentiment(
             continue
 
         yf = yfinance_data.get(ticker, {})
-        yf_score = yf.get("sentiment", 0)
+        yf_score = safe_float(yf.get("sentiment", 0))
         yf_count = yf.get("count", 0)
         yf_latest = yf.get("latest", "-")
+        yf_latest_time = yf.get("latest_time", "")
+
+        yf_latest_display = f"[{yf_latest_time}] {yf_latest}" if yf_latest_time and yf_latest != "-" else yf_latest
 
         mn = mention_map.get(ticker, {})
-        mn_score = mn.get("score", 0)
+        mn_score = mn.get("score", 0.0)
         mn_count = mn.get("count", 0)
         mn_sources = ", ".join(sorted(mn.get("sources", set()))) if mn.get("sources") else "-"
         mn_headlines = mn.get("headlines", [])
 
         combined = yf_score + mn_score
         sent_label = (
-            "🟢 Positif" if combined > 0
-            else "🔴 Negatif" if combined < 0
+            "🟢 Positif" if combined >= 0.3
+            else "🔴 Negatif" if combined <= -0.3
             else "🟡 Netral"
         )
 
@@ -563,7 +589,7 @@ def build_per_ticker_sentiment(
             "yFinance Headlines": yf_count,
             "Multi-Source Mentions": mn_count,
             "Sumber Berita": mn_sources,
-            "Latest (yFinance)": yf_latest[:100] + ("…" if len(yf_latest) > 100 else ""),
+            "Latest (yFinance)": yf_latest_display[:100] + ("…" if len(yf_latest_display) > 100 else ""),
             "_mn_headlines": mn_headlines,
             "_combined": combined,
         })

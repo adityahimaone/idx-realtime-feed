@@ -637,37 +637,7 @@ async def fetch_stockbit_trending():
         logger.error(f"Exodus API trending fetch failed: {e}")
     return []
 
-@st.cache_data(ttl=60)
-def fetch_ihsg_data():
-    """Fetch IHSG (^JKSE) live price, change, and 5m intraday sparkline."""
-    try:
-        idx = yf.Ticker("^JKSE")
-        hist_intraday = idx.history(period="1d", interval="5m")
-        hist_daily    = idx.history(period="2d", interval="1d")
-        if hist_intraday.empty or hist_daily.empty or len(hist_daily) < 2:
-            return None
-        curr  = float(hist_intraday["Close"].iloc[-1])
-        prev  = float(hist_daily["Close"].iloc[-2])
-        opens = float(hist_intraday["Open"].iloc[0])
-        highs = float(hist_intraday["High"].max())
-        lows  = float(hist_intraday["Low"].min())
-        vols  = float(hist_intraday["Volume"].sum())
-        prices = hist_intraday["Close"].dropna().tolist()
-        times  = [t.strftime("%H:%M") for t in hist_intraday.index]
-        return {
-            "current":    curr,
-            "prev_close": prev,
-            "open":       opens,
-            "high":       highs,
-            "low":        lows,
-            "volume":     vols,
-            "change_abs": curr - prev,
-            "change_pct": ((curr - prev) / prev) * 100,
-            "prices":     prices,
-            "times":      times,
-        }
-    except Exception:
-        return None
+# fetch_ihsg_data() defined below with multi-source fallback
 
 
 @st.cache_data(ttl=300)
@@ -1169,6 +1139,9 @@ badge_text = "LIVE 🔴" if is_day_trade else "CLOSED ⏸️"
 badge_color = "#10B981" if is_day_trade else "#F59E0B"
 badge_bg = "rgba(16,185,129,0.15)" if is_day_trade else "rgba(245,158,11,0.15)"
 badge_border = "rgba(16,185,129,0.3)" if is_day_trade else "rgba(245,158,11,0.3)"
+sb_auth_ok = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
+sb_status_dot = "pulse-green" if sb_auth_ok else "pulse-orange"
+sb_status_text = "Ready (Deep Analysis)" if sb_auth_ok else "Unavailable (Missing Token)"
 
 status_html = f"""
 <style>
@@ -1176,8 +1149,10 @@ status_html = f"""
     .status-item {{ display:flex; align-items:center; gap:8px; font-size:0.9em; }}
     .live-label-container {{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:6px; font-weight:700; font-size:0.8em; }}
     @keyframes pulse-green-anim {{ 0% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,.7); }} 70% {{ transform:scale(1); box-shadow:0 0 0 6px rgba(16,185,129,0); }} 100% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,0); }} }}
+    @keyframes pulse-orange-anim {{ 0% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(245,158,11,.7); }} 70% {{ transform:scale(1); box-shadow:0 0 0 6px rgba(245,158,11,0); }} 100% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(245,158,11,0); }} }}
     .pulse-dot {{ width:10px; height:10px; border-radius:50%; display:inline-block; }}
     .pulse-green {{ background:#10B981; box-shadow:0 0 0 0 rgba(16,185,129,.7); animation:pulse-green-anim 2s infinite; }}
+    .pulse-orange {{ background:#F59E0B; box-shadow:0 0 0 0 rgba(245,158,11,.7); animation:pulse-orange-anim 2s infinite; }}
 </style>
 <div class="status-container">
     <div class="status-item">
@@ -1199,8 +1174,8 @@ status_html = f"""
         <span><strong>IDX Endpoint:</strong> Online (Trading Summary)</span>
     </div>
     <div class="status-item">
-        <span class="pulse-dot pulse-green"></span>
-        <span><strong>Exodus API:</strong> Ready (Deep Analysis)</span>
+        <span class="pulse-dot {sb_status_dot}"></span>
+        <span><strong>Exodus API:</strong> {sb_status_text}</span>
     </div>
     <hr style="width:100%;border:0;border-top:1px solid #2D3748;margin:8px 0;">
     <div style="color:#64748B;font-size:0.8em;">Freshness Fallback Pipeline: Google Sheets ➔ yfinance ➔ IDX. (Stockbit for Deep Analysis only).</div>
@@ -1253,25 +1228,205 @@ status_html = f"""
 st.components.v1.html(status_html, height=160, scrolling=False)
 
 # ============================================================================
-# IHSG LIVE CHART (below Market Status)
+# IHSG DATA FETCH WITH FALLBACKS
+# ============================================================================
+
+@st.cache_data(ttl=60)
+def fetch_ihsg_yfinance() -> dict | None:
+    """Primary: yfinance IHSG with 5m intraday sparkline."""
+    try:
+        idx = yf.Ticker("^JKSE")
+        hist_intraday = idx.history(period="1d", interval="5m")
+        hist_daily    = idx.history(period="2d", interval="1d")
+        if hist_intraday.empty or hist_daily.empty or len(hist_daily) < 2:
+            return None
+        curr  = float(hist_intraday["Close"].iloc[-1])
+        prev  = float(hist_daily["Close"].iloc[-2])
+        return _build_ihsg_result(hist_intraday, curr, prev, "Yahoo Finance")
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=60)
+def fetch_ihsg_yahoo_api() -> dict | None:
+    """Fallback 1: direct Yahoo Finance REST API (bypasses yfinance library)."""
+    try:
+        url = (
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EJKSE?"
+            "interval=5m&range=1d&includePrePost=false"
+        )
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests_cf.get(url, headers=headers, timeout=15, impersonate="chrome")
+
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        result = data.get("chart", {}).get("result", [{}])[0]
+        meta   = result.get("meta", {})
+        timestamps = result.get("timestamp", [])
+        quotes = result.get("indicators", {}).get("quote", [{}])[0]
+        closes = quotes.get("close", [])
+        opens  = quotes.get("open", [])
+
+        if not closes or not timestamps:
+            return None
+
+        # Filter out None closes
+        valid = [(t, c) for t, c in zip(timestamps, closes) if c is not None]
+        if not valid:
+            return None
+
+        times, prices = zip(*valid)
+        curr = prices[-1]
+        prev = meta.get("previousClose", 0) or prices[0]
+
+        # Build a pseudo-DataFrame for _build_ihsg_result compatibility
+        import pandas as pd
+        df = pd.DataFrame({
+            "Close": list(prices),
+            "Open":  [o or 0 for o in opens[:len(prices)]],
+            "High":  [max(prices[i:i+5]) if i+5 < len(prices) else prices[-1] for i in range(len(prices))],
+            "Low":   [min(prices[i:i+5]) if i+5 < len(prices) else prices[-1] for i in range(len(prices))],
+            "Volume": [0] * len(prices),
+        })
+        df.index = pd.to_datetime([t for t in times], unit="s")
+        return _build_ihsg_result(df, curr, prev, "Yahoo Finance API")
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=120)
+def fetch_ihsg_google_finance() -> dict | None:
+    """
+    Fallback 2: Google Finance scrape for IHSG.
+    Only returns current price/change — no sparkline.
+    """
+    try:
+        url = "https://www.google.com/finance/quote/IDX_COMPOSITE:IDX?hl=en"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+            )
+        }
+        r = requests_cf.get(url, headers=headers, timeout=15, impersonate="chrome")
+        if r.status_code != 200:
+            return None
+
+        import re, bs4
+        soup = bs4.BeautifulSoup(r.text, "html.parser")
+
+        # Price: div[data-last-price] or the big text element
+        price_el = soup.select_one("div.YMlKec.fxKbKc")
+        if not price_el:
+            return None
+
+        price_text = price_el.get_text(strip=True).replace(",", "").replace(".", "")
+        price = float(price_text[:-2] + "." + price_text[-2:])  # handle formatting
+
+        # Change: the span[data-change] nearby
+        change_el = soup.select_one("div.P6K39c")
+        change_text = change_el.get_text(strip=True) if change_el else "0"
+
+        # Parse change text like "+12.34 (0.56%)"
+        change_match = re.search(r"([+-]?\d+[\d,.]*)", change_text.replace(",", ""))
+        change_val = float(change_match.group(1)) if change_match else 0.0
+
+        # Pct change from second group in parentheses
+        pct_match = re.search(r"\(([+-]?\d+[\d,.]*)%\)", change_text)
+        change_pct = float(pct_match.group(1)) if pct_match else 0.0
+
+        prev_close = price - change_val
+
+        return {
+            "current":     price,
+            "prev_close":  prev_close,
+            "open":        None,
+            "high":        None,
+            "low":         None,
+            "volume":      None,
+            "change_abs":  change_val,
+            "change_pct":  change_pct,
+            "prices":      [],   # no sparkline data
+            "times":       [],
+            "source":      "Google Finance",
+            "sparkline":   False,
+        }
+    except Exception:
+        return None
+
+
+def _build_ihsg_result(df, curr, prev, source: str) -> dict:
+    """Build unified IHSG result dict from DataFrame."""
+    opens = float(df["Open"].iloc[0]) if "Open" in df and not df["Open"].empty else curr
+    highs = float(df["High"].max())
+    lows  = float(df["Low"].min())
+    vols  = float(df["Volume"].sum()) if "Volume" in df else 0
+    prices = df["Close"].dropna().tolist()
+    times  = [t.strftime("%H:%M") for t in df.index]
+    return {
+        "current":    curr,
+        "prev_close": prev,
+        "open":       opens,
+        "high":       highs,
+        "low":        lows,
+        "volume":     vols,
+        "change_abs": curr - prev,
+        "change_pct": ((curr - prev) / prev) * 100,
+        "prices":     prices,
+        "times":      times,
+        "source":     source,
+        "sparkline":  True,
+    }
+
+
+def fetch_ihsg_data() -> dict | None:
+    """
+    Fetch IHSG data with cascading fallbacks.
+    1. yfinance (full 5m sparkline)
+    2. Yahoo Finance REST API (full 5m sparkline)
+    3. Google Finance scrape (price/change only, no sparkline)
+    """
+    data = fetch_ihsg_yfinance()
+    if data:
+        return data
+
+    data = fetch_ihsg_yahoo_api()
+    if data:
+        return data
+
+    data = fetch_ihsg_google_finance()
+    if data:
+        return data
+
+    return None
+
+
+# ============================================================================
+# IHSG LIVE CARD
 # ============================================================================
 ihsg = fetch_ihsg_data()
 if ihsg:
-    is_up = ihsg["change_abs"] >= 0
+    is_up      = ihsg["change_abs"] >= 0
     chg_color  = "#10B981" if is_up else "#EF4444"
     chg_arrow  = "▲" if is_up else "▼"
     chg_bg     = "rgba(16,185,129,0.08)" if is_up else "rgba(239,68,68,0.08)"
     chg_border = "rgba(16,185,129,0.25)" if is_up else "rgba(239,68,68,0.25)"
 
-    # Build inline sparkline via Chart.js CDN
-    prices_js  = str([round(p, 2) for p in ihsg["prices"]])
-    times_js   = str(ihsg["times"])
-    min_p      = round(min(ihsg["prices"]) * 0.9995, 2)
-    max_p      = round(max(ihsg["prices"]) * 1.0005, 2)
-    line_color = "#10B981" if is_up else "#EF4444"
-    fill_color = "rgba(16,185,129,0.12)" if is_up else "rgba(239,68,68,0.12)"
+    if ihsg.get("sparkline") and ihsg["prices"]:
+        prices_js  = str([round(p, 2) for p in ihsg["prices"]])
+        times_js   = str(ihsg["times"])
+        min_p      = round(min(ihsg["prices"]) * 0.9995, 2)
+        max_p      = round(max(ihsg["prices"]) * 1.0005, 2)
+        line_color = "#10B981" if is_up else "#EF4444"
+        fill_color = "rgba(16,185,129,0.12)" if is_up else "rgba(239,68,68,0.12)"
+        open_str   = f"O <b style='color:#CBD5E1;'>{ihsg['open']:,.2f}</b>" if ihsg.get("open") else ""
+        high_str   = f"H <b style='color:#10B981;'>{ihsg['high']:,.2f}</b>" if ihsg.get("high") else ""
+        low_str    = f"L <b style='color:#EF4444;'>{ihsg['low']:,.2f}</b>" if ihsg.get("low") else ""
+        prev_str   = f"Prev <b style='color:#CBD5E1;'>{ihsg['prev_close']:,.2f}</b>"
+        vol_str    = f"Vol <b style='color:#CBD5E1;'>{ihsg['volume']/1e9:.2f}B</b>" if ihsg.get("volume") else ""
 
-    ihsg_html = f"""
+        ihsg_html = f"""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
 <div id="ihsg_widget" style="background:#161B27;border:1px solid #2D3748;border-radius:14px;padding:16px 20px;display:flex;gap:24px;align-items:center;margin-bottom:4px;">
   <div style="flex:0 0 auto;">
@@ -1281,13 +1436,9 @@ if ihsg:
       <span style="color:{chg_color};font-weight:700;font-size:0.95em;font-family:Inter,sans-serif;">{chg_arrow} {abs(ihsg['change_abs']):,.2f} ({abs(ihsg['change_pct']):.2f}%)</span>
     </div>
     <div style="display:flex;gap:14px;margin-top:10px;font-size:0.78em;color:#94A3B8;font-family:Inter,sans-serif;">
-      <span>O <b style="color:#CBD5E1;">{ihsg['open']:,.2f}</b></span>
-      <span>H <b style="color:#10B981;">{ihsg['high']:,.2f}</b></span>
-      <span>L <b style="color:#EF4444;">{ihsg['low']:,.2f}</b></span>
-      <span>Prev <b style="color:#CBD5E1;">{ihsg['prev_close']:,.2f}</b></span>
-      <span>Vol <b style="color:#CBD5E1;">{ihsg['volume']/1e9:.2f}B</b></span>
+      {open_str} {high_str} {low_str} {prev_str} {vol_str}
     </div>
-    <div style="margin-top:5px;font-size:0.72em;color:#475569;font-family:Inter,sans-serif;">Sumber: Yahoo Finance (^JKSE) · refresh tiap 60 detik</div>
+    <div style="margin-top:5px;font-size:0.72em;color:#475569;font-family:Inter,sans-serif;">Sumber: {ihsg['source']} · refresh tiap 60 detik</div>
   </div>
   <div style="flex:1;min-width:0;height:90px;position:relative;">
     <canvas id="ihsg_chart" style="width:100%;height:90px;"></canvas>
@@ -1298,39 +1449,21 @@ if ihsg:
 (function(){{
   var prices={prices_js};
   var labels={times_js};
-  var ctx;
   function init(){{
     var el=document.getElementById('ihsg_chart');
     if(!el){{el=window.parent.document.getElementById('ihsg_chart');}}
     if(!el)return;
-    ctx=el.getContext('2d');
+    var ctx=el.getContext('2d');
     var grad=ctx.createLinearGradient(0,0,0,90);
     grad.addColorStop(0,'{fill_color}');
     grad.addColorStop(1,'rgba(0,0,0,0)');
     new Chart(ctx,{{
       type:'line',
-      data:{{
-        labels:labels,
-        datasets:[{{
-          data:prices,
-          borderColor:'{line_color}',
-          borderWidth:2,
-          backgroundColor:grad,
-          fill:true,
-          pointRadius:0,
-          tension:0.3
-        }}]
-      }},
+      data:{{labels:labels,datasets:[{{data:prices,borderColor:'{line_color}',borderWidth:2,backgroundColor:grad,fill:true,pointRadius:0,tension:0.3}}]}},
       options:{{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{{legend:{{display:false}},tooltip:{{
-          callbacks:{{label:function(c){{return ' '+c.parsed.y.toLocaleString('id-ID',{{minimumFractionDigits:2}}); }}}}
-        }}}},
-        scales:{{
-          x:{{display:false}},
-          y:{{display:false,min:{min_p},max:{max_p}}}
-        }},
+        responsive:true,maintainAspectRatio:false,
+        plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:function(c){{return ' '+c.parsed.y.toLocaleString('id-ID',{{minimumFractionDigits:2}}); }}}}}}}},
+        scales:{{x:{{display:false}},y:{{display:false,min:{min_p},max:{max_p}}}}},
         animation:{{duration:400}}
       }}
     }});
@@ -1339,9 +1472,19 @@ if ihsg:
 }})();
 </script>
 """
-    st.components.v1.html(ihsg_html, height=175, scrolling=False)
+        st.components.v1.html(ihsg_html, height=175, scrolling=False)
+    else:
+        # Fallback: price/change only card (Google Finance scrape — no sparkline)
+        st.markdown(f"""
+<div style="background:#161B27;border:1px solid #2D3748;border-radius:14px;padding:16px 20px;margin-bottom:4px;">
+  <div style="font-size:0.75em;color:#64748B;font-weight:600;letter-spacing:.08em;text-transform:uppercase;">IHSG / IDX Composite</div>
+  <div style="font-size:2.1em;font-weight:800;color:#F1F5F9;">{ihsg['current']:,.2f}</div>
+  <div style="color:{chg_color};font-weight:700;margin-top:4px;">{chg_arrow} {abs(ihsg['change_abs']):,.2f} ({abs(ihsg['change_pct']):.2f}%)</div>
+  <div style="margin-top:6px;font-size:0.72em;color:#475569;">Sumber: {ihsg['source']} (no sparkline) · refresh tiap 120 detik</div>
+</div>
+""", unsafe_allow_html=True)
 else:
-    st.caption("⚠️ IHSG data tidak tersedia saat ini (Yahoo Finance timeout).")
+    st.caption("⚠️ IHSG data tidak tersedia di semua sumber (Yahoo Finance + Google Finance timeout).")
 
 # Load database
 ticker_df = load_ticker_pool()
@@ -1502,14 +1645,16 @@ if(d<=0){{clearInterval(t);s.textContent="0m 0s (Scan Complete)";var l=window.lo
 # ============================================================================
 filtered_df = ticker_df.copy()
 
-if selected_sectors:
-    filtered_df = filtered_df[filtered_df["Sector"].isin(selected_sectors)]
-if selected_ranks:
-    filtered_df = filtered_df[filtered_df["Rank"].isin(selected_ranks)]
-if min_score > 0:
-    filtered_df = filtered_df[filtered_df["Score v2"].apply(safe_float) >= min_score]
 if search_ticker:
+    # pencarian eksplisit selalu menang, bypass semua filter lain
     filtered_df = filtered_df[filtered_df["Clean Ticker"] == search_ticker]
+else:
+    if selected_sectors:
+        filtered_df = filtered_df[filtered_df["Sector"].isin(selected_sectors)]
+    if selected_ranks:
+        filtered_df = filtered_df[filtered_df["Rank"].isin(selected_ranks)]
+    if min_score > 0:
+        filtered_df = filtered_df[filtered_df["Score v2"].apply(safe_float) >= min_score]
 
 display_list = filtered_df["Clean Ticker"].tolist()
 cand_list = display_list[:max_scan]
@@ -1535,7 +1680,9 @@ with col_ref1:
         st.rerun()
 
 with col_ref2:
-    if st.button("🚀 Refresh Live Feed (Stockbit)", use_container_width=True, help="Fetch fresh price directly from Stockbit Exodus API"):
+    sb_auth_ok = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
+    sb_help_text = "Fetch fresh price directly from Stockbit Exodus API" if sb_auth_ok else "Stockbit unavailable (Requires token or credentials in .env)"
+    if st.button("🚀 Refresh Live Feed (Stockbit)", use_container_width=True, help=sb_help_text, disabled=not sb_auth_ok):
         # Helper batch fetcher for Stockbit prices specifically
         async def fetch_stockbit_screener_batch(tickers, df, delay):
             token = await auth_service.get_token()
@@ -1661,19 +1808,20 @@ if st.session_state.screener_data:
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
-tab1, tab_wl, tab_port, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-    "📋 Displaying Tickers",
+tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1 = st.tabs([
+    "🏆 Top Picks",
+    "🎯 Intraday Buy Recommendations",
     "⭐ Custom Watchlist",
     "💼 Live Portfolio Tracker",
-    "🎯 Intraday Buy Recommendations",
+    "🔍 Deep Stock Analysis (Exodus API)",
     "📊 General Screener Board",
     "🔥 Trending Stocks",
     "🌙 BSJP Recommendations",
-    "📈 Minervini Trend",
-    "🔍 Deep Stock Analysis (Exodus API)",
-    "📰 News-Based Signals",
     "🚀 Pre-ARA Momentum",
-    "🌊 Elliott Wave"
+    "📈 Minervini Trend",
+    "📰 News-Based Signals",
+    "🌊 Elliott Wave",
+    "📋 Active Tickers Pool"
 ])
 
 # ============================================================================
@@ -1924,563 +2072,52 @@ with tab_port:
         st.info("Portfolio is empty. Add assets using the fields above.")
 
 # ============================================================================
-# TAB 1: DISPLAYING TICKERS
+# TAB RENDERING PORTING
 # ============================================================================
 with tab1:
-    st.markdown("### 📋 Active Tickers Pool (Google Sheets)")
-    st.caption("Displays all active tickers currently loaded from the Google Sheets 'All Tickers' database.")
-    
-    # Filter active tickers (status contains ACTIVE)
-    active_ticker_df = ticker_df[ticker_df["Status"].str.contains("ACTIVE", na=False)].copy()
-    
-    # Define clean column order
-    col_order = [
-        'Ticker', 'Company Name', 'Sector', 'Rank', 'Status', 'Score v2', 
-        'Price', 'Change%', 'Volume', 'Vol_Avg', 'MA20', 'Support', 'Breakout', 
-        'RSI14', 'SL_Practical', 'TP_Target', 'RR_Ratio', 'Last Update'
-    ]
-    # Keep remaining columns
-    remaining_cols = [c for c in active_ticker_df.columns if c not in col_order and c != 'Clean Ticker']
-    display_cols = col_order + remaining_cols
-    
-    st.dataframe(
-        active_ticker_df[display_cols],
-        column_config={
-            "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
-            "Change%": st.column_config.TextColumn("Change%"),
-            "Volume": st.column_config.NumberColumn("Volume", format="%d"),
-            "Vol_Avg": st.column_config.NumberColumn("Vol Avg", format="%d"),
-            "MA20": st.column_config.NumberColumn("MA20", format="IDR %d"),
-            "Support": st.column_config.NumberColumn("Support", format="IDR %d"),
-            "Breakout": st.column_config.NumberColumn("Breakout", format="IDR %d"),
-            "SL_Practical": st.column_config.NumberColumn("SL Practical", format="IDR %d"),
-            "TP_Target": st.column_config.NumberColumn("TP Target", format="IDR %d"),
-            "RSI14": st.column_config.NumberColumn("RSI (14)", format="%.1f"),
-            "Score v2": st.column_config.NumberColumn("Score v2", format="%d"),
-        },
-        use_container_width=True,
-        hide_index=True
-    )
+    from ui.tabs.tab1_live_feed import render_tab1
+    render_tab1(ticker_df)
 
-# ============================================================================
-# TAB 2: INTRADAY BUY RECOMMENDATIONS
-# ============================================================================
 with tab2:
-    st.markdown("### 🎯 Intraday Buy Recommendations")
-    st.caption("Active recommendations generated using target prices and risk/reward formulas (Top 30 Strong Buys).")
-    
-    if scored_list:
-        rec_list = []
-        for s in scored_list:
-            price = safe_float(s["Live Price"])
-            score = s["Intraday Score"]
-            hist_row = s["hist_row_obj"]
-            
-            # Stop loss: support or MA20 or standard 7%
-            sl_prac = safe_float(hist_row.get("SL_Practical"))
-            ma20 = safe_float(hist_row.get("MA20"))
-            sl = sl_prac if sl_prac > 0 else round(max(ma20 * 0.97, price * 0.93), 2)
-            if sl >= price:
-                sl = round(price * 0.93, 2)
-                
-            # Target: 52W High or standard 15%
-            high52 = safe_float(hist_row.get("52W High"))
-            tp = round(min(high52, price * 1.15), 2) if high52 > 0 else round(price * 1.15, 2)
-            
-            rsi = safe_float(hist_row.get("RSI14"))
-            
-            action, max_pos, notes = compute_action_recommendation(price, sl, tp, score, rsi)
-            
-            # Append ATR stop-loss if ATR14 is available
-            atr = safe_float(hist_row.get("ATR14"))
-            if atr > 0:
-                sl_atr = round(price - 1.5 * atr, 2)
-                notes += f" | SL_ATR={sl_atr}"
-                
-            # Append UMA & Corporate Action warnings
-            uma_str = hist_row.get("UMA", "")
-            corp_act_str = hist_row.get("Corp Action", "")
-            if uma_str:
-                notes += f" | {uma_str}"
-            if corp_act_str:
-                notes += f" | CorpAct: {corp_act_str}"
-            
-            if "STRONG BUY" in action:
-                rec_list.append({
-                    "Ticker": s["Ticker"],
-                    "Company Name": s["Company Name"],
-                    "Sector": s["Sector"],
-                    "Price": price,
-                    "Intraday Score": score,
-                    "Buy Target": price,
-                    "Stop Loss (SL)": sl,
-                    "Target Price (TP)": tp,
-                    "R/R Ratio": round((tp - price) / max(1.0, price - sl), 2),
-                    "Max Pos": max_pos,
-                    "Action": action,
-                    "Notes": notes,
-                    "Change Pct": s["Change %"],
-                    "Vol Spike": s["Vol Spike"],
-                    "Live Signal": s["Live Signal"],
-                    "Source Used": s["Source Used"]
-                })
-                
-        if rec_list:
-            # Sort by Intraday Score descending and take top 30
-            rec_list = sorted(rec_list, key=lambda x: x["Intraday Score"], reverse=True)[:30]
-            # Display recommendations as premium HTML cards
-            html_cards = '<div class="card-grid">'
-            for r in rec_list:
-                # Determine Action Class
-                act = r["Action"]
-                if "STRONG BUY" in act:
-                    act_class = "action-strong-buy"
-                elif "BUY" in act:
-                    act_class = "action-buy"
-                else:
-                    act_class = "action-speculative"
-                    
-                # Price change styling
-                chg = r["Change Pct"]
-                chg_class = "change-up" if chg >= 0 else "change-down"
-                chg_sign = "+" if chg > 0 else ""
-                
-                # Progress bar color based on score
-                sc = r["Intraday Score"]
-                if sc >= 85:
-                    bar_color = "#10B981" # green
-                elif sc >= 70:
-                    bar_color = "#3B82F6" # blue
-                elif sc >= 50:
-                    bar_color = "#F59E0B" # yellow/orange
-                else:
-                    bar_color = "#EF4444" # red
-                    
-                card_html = f"""
-                <div class="rec-card">
-                    <div class="card-header">
-                        <div>
-                            <span class="ticker-badge">{r['Ticker']}</span>
-                            <div class="company-name">{r['Company Name']}</div>
-                            <div class="sector-tag">{r['Sector']}</div>
-                        </div>
-                        <span class="action-badge {act_class}">{r['Action']}</span>
-                    </div>
-                    <div class="price-display">
-                        <span class="price-value">IDR {r['Price']:,.0f}</span>
-                        <span class="price-change {chg_class}">{chg_sign}{chg:.2f}%</span>
-                    </div>
-                    <div class="score-section">
-                        <div class="score-header">
-                            <span>Intraday Health Score</span>
-                            <span style="color: {bar_color}; font-weight: bold;">{sc}/100</span>
-                        </div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" style="width: {sc}%; background-color: {bar_color};"></div>
-                        </div>
-                    </div>
-                    <div class="metric-row">
-                        <div class="metric-box">
-                            <div class="metric-label">Target Price (TP)</div>
-                            <div class="metric-value" style="color: #10B981; font-weight: bold;">IDR {r['Target Price (TP)']:,.0f}</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Stop Loss (SL)</div>
-                            <div class="metric-value" style="color: #EF4444; font-weight: bold;">IDR {r['Stop Loss (SL)']:,.0f}</div>
-                        </div>
-                    </div>
-                    <div class="metric-row">
-                        <div class="metric-box">
-                            <div class="metric-label">Risk/Reward (R/R)</div>
-                            <div class="metric-value" style="color: #38BDF8; font-weight: bold;">{r['R/R Ratio']:.2f}x</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Max Position Size</div>
-                            <div class="metric-value" style="color: #F59E0B; font-weight: bold;">{r['Max Pos']}</div>
-                        </div>
-                    </div>
-                    <div class="metric-row">
-                        <div class="metric-box">
-                            <div class="metric-label">Volume Spike</div>
-                            <div class="metric-value">{r['Vol Spike']:.2f}x avg</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Source & Age</div>
-                            <div class="metric-value" style="font-size: 0.85em; text-transform: uppercase;">{r['Source Used']}</div>
-                        </div>
-                    </div>
-                    <div class="notes-section">
-                        <b>Setup Notes:</b> {r['Notes']}
-                    </div>
-                </div>
-                """
-                html_cards += minify_html(card_html)
-            html_cards += "</div>"
-            st.markdown(html_cards, unsafe_allow_html=True)
-        else:
-            st.info("No active recommendations found. Scoring is currently under HOLD/SELL thresholds.")
-    else:
-        st.info("Please refresh the feed to calculate live recommendations.")
+    from ui.tabs.tab2_recommendations import render_tab2
+    render_tab2(scored_list)
 
-# ============================================================================
-# TAB 3: GENERAL SCREENER BOARD
-# ============================================================================
 with tab3:
-    render_tab3(scored_list)
+    scalp_data, swing_data, lt_data = render_tab3(scored_list)
 
 with tab4:
     trending_source_list = scored_list_global if exclude_filters_trending else scored_list
-    render_tab4(ticker_df, trending_source_list)
+    trending_data = render_tab4(ticker_df, trending_source_list)
 
-# ============================================================================
-# TAB 5: BSJP RECOMMENDATIONS (BELI SORE JUAL PAGI)
-# ============================================================================
 with tab5:
-    st.markdown("### 🌙 BSJP (Beli Sore, Jual Pagi) Recommendations")
-    st.caption("BSJP setups are ideally analyzed between 15:00 - 16:15 WIB before market close.")
-    
-    bsjp_source_list = scored_list_global if exclude_filters_bsjp else scored_list
-    if bsjp_source_list:
-        bsjp_data = []
-        for s in bsjp_source_list:
-            hist_row = s["hist_row_obj"]
-            raw_data = s["raw_data_obj"]
-            
-            # BSJP criteria check
-            # 1. Closed positive and near high of the day (price is in upper 30% of day's range)
-            price = s["Live Price"]
-            high = safe_float(raw_data.get("high", price))
-            low = safe_float(raw_data.get("low", price))
-            prev_close = safe_float(hist_row.get("ClosePrev", price))
-            
-            chg = s["Change %"]
-            
-            # Standard support levels
-            support = safe_float(hist_row.get("Support", price * 0.95))
-            if support <= 0 or support >= price:
-                support = price * 0.95
-                
-            resistance = safe_float(hist_row.get("Breakout", price * 1.05))
-            if resistance <= 0 or resistance <= price:
-                resistance = price * 1.05
-                
-            day_range = high - low
-            price_pos = (price - low) / day_range if day_range > 0 else 1.0
-            
-            # Check setup fit
-            if chg > 1.0 and price_pos >= 0.7:
-                # Calculate R/R for morning selling target (TP is breakout resistance, SL practical support or -3% maximum)
-                tp = round(resistance, 2)
-                sl = round(max(support, price * 0.97), 2)
-                rr = (tp - price) / max(1.0, price - sl)
-                
-                # Check setup score based on score card and vol surge
-                vsr = safe_float(raw_data.get("volume", 0)) / safe_float(hist_row.get("Vol_Avg", 1)) if safe_float(hist_row.get("Vol_Avg", 1)) > 0 else 1.0
-                setup_score = int(round(s["Intraday Score"] * 0.7 + min(100, vsr * 20) * 0.3))
-                
-                if rr >= 1.2 and setup_score >= 60:
-                    bsjp_data.append({
-                        "Ticker": s["Ticker"],
-                        "Company Name": s["Company Name"],
-                        "Live Price": price,
-                        "Change %": chg,
-                        "Price Pos (Day Range)": f"{int(price_pos * 100)}%",
-                        "Volume Surge (VSR)": vsr,
-                        "Entry (Buy Sore)": price,
-                        "Target (Jual Pagi)": tp,
-                        "Stop Loss (SL)": sl,
-                        "Risk/Reward Ratio": round(rr, 2),
-                        "Setup Score": setup_score
-                    })
-                    
-        if bsjp_data:
-            st.dataframe(
-                pd.DataFrame(bsjp_data).sort_values(by="Setup Score", ascending=False),
-                column_config={
-                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
-                    "Volume Surge (VSR)": st.column_config.NumberColumn("Volume Surge (VSR)", format="%.2f x"),
-                    "Entry (Buy Sore)": st.column_config.NumberColumn("Entry Price", format="IDR %d"),
-                    "Target (Jual Pagi)": st.column_config.NumberColumn("Target TP", format="IDR %d"),
-                    "Stop Loss (SL)": st.column_config.NumberColumn("Stop Loss", format="IDR %d"),
-                    "Risk/Reward Ratio": st.column_config.NumberColumn("R/R", format="%.2f x"),
-                    "Setup Score": st.column_config.ProgressColumn(
-                        "Setup Score",
-                        min_value=0,
-                        max_value=100,
-                        format="%d"
-                    )
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("No tickers currently match standard BSJP setups (Positive change > 1%, closing in upper 30% of day's range, R/R >= 1.2x).")
-    else:
-        st.info("Refresh the live feed to display BSJP setups.")
+    from ui.tabs.tab5_bsjp import render_tab5
+    bsjp_data = render_tab5(scored_list_global, scored_list, exclude_filters_bsjp)
 
-# ============================================================================
-# TAB 6: MARK MINERVINI TREND TEMPLATE
-# ============================================================================
 with tab6:
-    st.markdown("### 📈 Mark Minervini Trend Template")
-    st.caption("Validates tickers against Mark Minervini's legendary Stage 2 Uptrend criteria based on historical daily moving averages.")
-    
-    minervini_source_list = scored_list_global if exclude_filters_minervini else scored_list
-    if minervini_source_list:
-        minervini_data = []
-        for s in minervini_source_list:
-            hist_row = s["hist_row_obj"]
-            raw_data = s["raw_data_obj"]
-            ticker = s["Ticker"]
-            
-            # Extract closing price
-            last = s["Live Price"]
-            
-            # Extract historical averages from Google Sheet cols
-            sma50 = safe_float(hist_row.get("MA50", 0))
-            sma200 = safe_float(hist_row.get("MA200", 0))
-            # Fallback estimation for SMA150 if not explicitly defined in sheet
-            sma150 = safe_float(hist_row.get("MA150", 0))
-            if sma150 <= 0:
-                # Estimate SMA150 as a weighted blend of SMA50 and SMA200 if missing
-                sma150 = round(sma50 * 0.4 + sma200 * 0.6, 2)
-                
-            high52 = safe_float(hist_row.get("52W High", 0))
-            if high52 <= 0:
-                high52 = last * 1.10
-                
-            vol_today = safe_float(raw_data.get("volume", 0))
-            vol_avg20 = safe_float(hist_row.get("Vol_Avg", 1))
-            if vol_avg20 <= 0:
-                vol_avg20 = 1.0
-                
-            # Conditions validation dictionary
-            conds = {
-                "Price > SMA50": last > sma50,
-                "Price > SMA150": last > sma150,
-                "Price > SMA200": last > sma200,
-                "SMA50 > SMA150": sma50 > sma150,
-                "SMA150 > SMA200": sma150 > sma200,
-                "SMA50 > SMA200": sma50 > sma200, 
-                "Within 25% of 52W High": last >= (high52 * 0.75),
-                "Volume > Avg20": vol_today > vol_avg20
-            }
-            
-            score_val = sum(conds.values())
-            passed = (score_val >= 6)
-            
-            minervini_data.append({
-                "Ticker": ticker,
-                "Company Name": s["Company Name"],
-                "Live Price": last,
-                "SMA 50": sma50,
-                "SMA 150 (Est)": sma150,
-                "SMA 200": sma200,
-                "52W High": high52,
-                "Score": f"{score_val}/8",
-                "Passed Template": "✅ PASSED" if passed else "❌ FAILED",
-                "score_int": score_val
-            })
-            
-        if minervini_data:
-            min_df = pd.DataFrame(minervini_data).sort_values(by="score_int", ascending=False)
-            st.dataframe(
-                min_df,
-                column_config={
-                    "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                    "SMA 50": st.column_config.NumberColumn("SMA 50", format="IDR %d"),
-                    "SMA 150 (Est)": st.column_config.NumberColumn("SMA 150", format="IDR %d"),
-                    "SMA 200": st.column_config.NumberColumn("SMA 200", format="IDR %d"),
-                    "52W High": st.column_config.NumberColumn("52W High", format="IDR %d"),
-                    "Score": st.column_config.TextColumn("Condition Score"),
-                    "Passed Template": st.column_config.TextColumn("Minervini Setup"),
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("No tickers evaluated for Mark Minervini Trend Template.")
-    else:
-        st.info("Refresh the live feed to calculate Mark Minervini trend template checklists.")
+    from ui.tabs.tab6_minervini import render_tab6
+    minervini_data = render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg)
 
-# ============================================================================
-# TAB 7: DEEP STOCK ANALYSIS (EXODUS API)
-# ============================================================================
 with tab7:
-    st.markdown("### 🔍 Deep Stock Analysis (Exodus API)")
-    st.caption("Fetches real-time bid/ask queue details and company statistics from unofficial Stockbit Exodus API.")
-    
-    if scored_list:
-        # Initialize session state for searched detail ticker
-        if "deep_analyzed_ticker" not in st.session_state:
-            st.session_state.deep_analyzed_ticker = ""
+    from ui.tabs.tab7_deep_analysis import render_tab7
+    render_tab7(ticker_df, scored_list)
 
-        col_input, col_btn = st.columns([3, 1])
-        with col_input:
-            search_input = st.text_input(
-                "Enter Ticker to fetch live orderbook details (e.g. BBCA):",
-                value=st.session_state.deep_analyzed_ticker,
-                key="deep_search_input"
-            ).upper().strip()
-        with col_btn:
-            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("🔍 Search Ticker", use_container_width=True):
-                st.session_state.deep_analyzed_ticker = search_input
-                st.rerun()
-
-        # Trigger action if input changed via Enter press
-        if search_input and search_input != st.session_state.deep_analyzed_ticker:
-            st.session_state.deep_analyzed_ticker = search_input
-            st.rerun()
-
-        selected_detail = st.session_state.deep_analyzed_ticker
-        if selected_detail:
-            # Check if the ticker is valid in ticker_df
-            matched_rows = ticker_df[ticker_df["Clean Ticker"] == selected_detail]
-            if not matched_rows.empty:
-                hist_row = matched_rows.iloc[0].to_dict()
-                
-                # Lookup raw data from screener_data if it was screened, otherwise mock
-                if selected_detail in st.session_state.screener_data:
-                    raw_data_obj = st.session_state.screener_data[selected_detail]
-                    source_used = raw_data_obj["source"]
-                else:
-                    raw_data_obj = {
-                        "last": safe_float(hist_row.get("Price")),
-                        "prev_close": safe_float(hist_row.get("ClosePrev")),
-                        "volume": safe_float(hist_row.get("Volume")),
-                        "source": "gsheet_fallback",
-                        "source_ts": None
-                    }
-                    source_used = "gsheet_fallback"
-                    
-                # Trigger Exodus API call for detail view
-                with st.spinner(f"⚡ Establishing secure connection to Exodus API and streaming real-time orderbook for {selected_detail}..."):
-                    snap = asyncio.run(fetch_stockbit_detail(selected_detail))
-                    
-                if snap:
-                    score_data = compute_intraday_score(raw_data_obj, hist_row)
-                    strategies = calculate_strategies(snap.last_price, score_data["score"], score_data["signal"])
-                    
-                    # 1. Main Stats
-                    c1, c2, c3, c4 = st.columns(4)
-                    with c1:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h4>Live Signal</h4>
-                            <h2 style="color: {score_data['color']}">{score_data['signal']}</h2>
-                            <span>Score: {score_data['score']}/100</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c2:
-                        chg_sign = "+" if snap.change_pct > 0 else ""
-                        chg_color = "#00D4AA" if snap.change_pct >= 0 else "#FF6B6B"
-                        st.markdown(f"""
-                        <div class="metric-card" style="border-left-color: {chg_color}">
-                            <h4>Live Price</h4>
-                            <h2>IDR {snap.last_price:,.0f}</h2>
-                            <span style="color: {chg_color}">{chg_sign}{snap.change_pct:.2f}% Intraday</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c3:
-                        imb_color = "#00D4AA" if (snap.imbalance_ratio and snap.imbalance_ratio >= 1.0) else "#FF6B6B"
-                        st.markdown(f"""
-                        <div class="metric-card" style="border-left-color: {imb_color}">
-                            <h4>Bid/Ask Imbalance</h4>
-                            <h2>{snap.imbalance_ratio:.2f}x</h2>
-                            <span>Total Bid: {snap.total_bid_lot:,} lot</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c4:
-                        st.markdown(f"""
-                        <div class="metric-card" style="border-left-color: #00D4AA">
-                            <h4>Source & Freshness</h4>
-                            <h2 style="color: #00D4AA;">EXODUS API</h2>
-                            <span>TS: {datetime.now(WIB).strftime('%H:%M:%S')} WIB (Live)</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    # 2. Strategies
-                    st.markdown("### 🎯 3-Tier Execution Strategies")
-                    sc1, sc2, sc3 = st.columns(3)
-                    with sc1:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                            <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Aggressive']['target']:,.0f} (+10%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Aggressive']['sl']:,.0f} (-5%)</li>
-                                <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Aggressive']['size']}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with sc2:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                            <h3 style="color: #FFFF00">⚡ Moderate (Pullback Play)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Moderate']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Moderate']['target']:,.0f} (+5%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Moderate']['sl']:,.0f} (-7%)</li>
-                                <li><b>R/R Ratio:</b> {strategies['Moderate']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Moderate']['size']}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with sc3:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                            <h3 style="color: #00D4AA">🛡️ Low Risk (Support Buy)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Low Risk']['entry']:,.0f}</li>
-                                <li><b>Target:</b> IDR {strategies['Low Risk']['target']:,.0f} (+3%)</li>
-                                <li><b>Stop Loss:</b> IDR {strategies['Low Risk']['sl']:,.0f} (-2%)</li>
-                                <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
-                                <li><b>Alloc:</b> {strategies['Low Risk']['size']}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    # 3. Live Orderbook Depth
-                    st.markdown("### 📥 Live Orderbook Depth (Exodus API)")
-                    dc1, dc2 = st.columns(2)
-                    with dc1:
-                        st.markdown("#### Bid Depth (Buy Side)")
-                        bids_list = [{"Price": int(lvl.price), "Lot Volume": lvl.lot, "Frequency": lvl.freq} for lvl in snap.bid_levels]
-                        if bids_list:
-                            st.table(pd.DataFrame(bids_list))
-                        else:
-                            st.caption("No live bids available.")
-                    with dc2:
-                        st.markdown("#### Offer Depth (Sell Side)")
-                        offers_list = [{"Price": int(lvl.price), "Lot Volume": lvl.lot, "Frequency": lvl.freq} for lvl in snap.ask_levels]
-                        if offers_list:
-                            st.table(pd.DataFrame(offers_list))
-                        else:
-                            st.caption("No live offers available.")
-                else:
-                    st.error("Failed to connect to Exodus API feed. Check auth token or try again.")
-            else:
-                st.warning(f"Ticker '{selected_detail}' not found in the Google Sheets 'All Tickers' database. Please check if the ticker exists.")
-    else:
-        st.info("Refresh the feed to select tickers for detailed orderbook analysis.")
-
-# ============================================================================
-# TAB 8: NEWS-BASED SIGNALS (MULTI-SOURCE + MACRO CORRELATION)
 with tab8:
-    render_tab8(scored_list, ticker_df)
+    news_data = render_tab8(scored_list, ticker_df)
 
-# ============================================================================
-# TAB 9: PRE-ARA MOMENTUM
-# ============================================================================
 with tab9:
-    render_tab9(scored_list)
+    pre_ara_data = render_tab9(scored_list)
 
-# ============================================================================
-# TAB 10: ELLIOTT WAVE
-# ============================================================================
 with tab10:
     render_tab10(scored_list)
+
+with tab11:
+    from ui.tabs.tab11_top_picks import render_tab11
+    render_tab11(
+        scored_list,
+        bsjp_data=bsjp_data,
+        minervini_data=minervini_data,
+        pre_ara_rows=pre_ara_data,
+        trending_rows=trending_data,
+        news_sentiment_rows=news_data
+    )
+

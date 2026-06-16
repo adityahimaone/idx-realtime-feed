@@ -18,6 +18,8 @@ from data.news import (
     build_per_ticker_sentiment,
 )
 
+from repositories.sqlite_repository import sqlite_repository
+
 WIB = __import__("pytz").timezone("Asia/Jakarta")
 
 # ---------------------------------------------------------------------------
@@ -48,22 +50,11 @@ SOURCES = [
 ]
 
 
-def _classify_sentiment(title: str) -> str:
-    """Rule-based sentiment from Indonesian/English news headlines."""
-    title_l = title.lower()
-    pos_kw = ["naik", "tumbuh", "laba", "positif", "dividen", "akuisisi",
-              "ekspansi", "profit", "growth", "rise", "gain", "upgrade",
-              "bullish", "lunasi", "raih", "rekor", "surplus", "bangkit"]
-    neg_kw = ["turun", "rugi", "gagal", "krisis", "utang", "debt", "loss",
-              "downgrade", "bearish", "crash", "tunda", "henti", "anjlok",
-              "merugi", "default", "sanksi", "protes", "ancam", "pailit"]
-    pos_hit = sum(1 for kw in pos_kw if kw in title_l)
-    neg_hit = sum(1 for kw in neg_kw if kw in title_l)
-    if pos_hit > neg_hit:
-        return "🟢 Positif"
-    elif neg_hit > pos_hit:
-        return "🔴 Negatif"
-    return "🟡 Netral"
+def _classify_sentiment(title: str, source: str = "") -> str:
+    """Classify sentiment using combined_ticker_sentiment from data/sentiment.py."""
+    from data.sentiment import combined_ticker_sentiment
+    res = combined_ticker_sentiment([{"title": title, "source": source}])
+    return res["label"]
 
 
 def _fetch_all_news() -> dict:
@@ -130,7 +121,7 @@ def _build_combined_df(all_news: dict) -> pd.DataFrame:
                 t for t in topics
                 if t.upper() in known_macros or len(t) > 4
             )
-            sentiment = _classify_sentiment(art["title"])
+            sentiment = _classify_sentiment(art["title"], source_tag)
             rows.append({
                 "Sumber": SOURCE_SORT.get(source_tag, 99),
                 "Sumber Label": SOURCE_LABEL.get(source_tag, source_tag.upper()),
@@ -198,11 +189,29 @@ def render_tab8(scored_list, ticker_df):
             all_news = _fetch_all_news()
             cache["data"] = all_news
             cache["ts"] = now_ts
+            # Persist articles to SQLite
+            for src, art_list in all_news.items():
+                if art_list:
+                    # Inject source key and save
+                    for art in art_list:
+                        art["source"] = src
+                    sqlite_repository.save_news_articles(art_list)
+            # Prune old news > 7 days
+            sqlite_repository.prune_old_news(7)
+    else:
+        # Load from SQLite if cache has no data but is not stale
+        if cache["data"] is None:
+            persisted = sqlite_repository.get_persisted_news()
+            # Group by source tag
+            all_news = {}
+            for tag, _ in SOURCES:
+                all_news[tag] = [a for a in persisted if a["source"] == tag]
+            cache["data"] = all_news
 
     all_news = cache["data"]
     last_fetch_dt = (
         datetime.fromtimestamp(cache["ts"], tz=WIB).strftime("%H:%M:%S WIB")
-        if cache["ts"] > 0 else "-"
+        if cache["ts"] > 0 else "Loaded from Database"
     )
 
     # Source badges
@@ -268,12 +277,12 @@ def render_tab8(scored_list, ticker_df):
 
         display_cols = ["Sumber Label", "Waktu", "Judul Berita", "Emiten", "Makro/Topik", "Sentimen"]
         col_config = {
-            "Sumber Label": st.column_config.TextColumn("Sumber", width="small"),
-            "Waktu":        st.column_config.TextColumn("Waktu", width="small"),
-            "Judul Berita": st.column_config.TextColumn("Judul Berita", width="large"),
-            "Emiten":       st.column_config.TextColumn("Emiten", width="small"),
-            "Makro/Topik":  st.column_config.TextColumn("Makro", width="medium"),
-            "Sentimen":     st.column_config.TextColumn("Sentimen", width="small"),
+            "Sumber Label": st.column_config.TextColumn("Sumber", width="small", help="Source outlet for this article"),
+            "Waktu":        st.column_config.TextColumn("Waktu", width="small", help="Timestamp representation for when this headline was parsed (WIB)"),
+            "Judul Berita": st.column_config.TextColumn("Judul Berita", width="large", help="Parsed article headline title"),
+            "Emiten":       st.column_config.TextColumn("Emiten", width="small", help="Emiten relevance classification derived via strict ticker checks"),
+            "Makro/Topik":  st.column_config.TextColumn("Makro", width="medium", help="Related macro themes and contexts associated with the headline"),
+            "Sentimen":     st.column_config.TextColumn("Sentimen", width="small", help="Fine-tuned context-aware sentiment rating"),
         }
 
         st.dataframe(
@@ -324,10 +333,12 @@ def render_tab8(scored_list, ticker_df):
                 }
                 src_label = src_map.get(art.get("source", ""), art.get("source", "").upper())
                 link = art.get("link", "")
+                pub_time = art.get("created_display", "")
+                time_prefix = f"({pub_time}) " if pub_time else ""
                 if link:
-                    st.markdown(f"- **[{src_label}]** [{art['title']}]({link})")
+                    st.markdown(f"- **[{src_label}]** {time_prefix}[{art['title']}]({link})")
                 else:
-                    st.markdown(f"- **[{src_label}]** {art['title']}")
+                    st.markdown(f"- **[{src_label}]** {time_prefix}{art['title']}")
 
         triggered = detect_macro_themes(all_articles)
 
@@ -346,10 +357,11 @@ def render_tab8(scored_list, ticker_df):
             pos_t = ", ".join(theme["positive_tickers"]) or "-"
             neg_t = ", ".join(theme["negative_tickers"]) or "-"
             headlines_li = "".join(
-                f'<li><a href="{a.get("link","#")}" target="_blank" '
+                f'<li><span style="color:#64748B;font-size:0.85em;margin-right:6px;">[{a.get("created_display") or "N/A"}]</span>'
+                f'<a href="{a.get("link","#")}" target="_blank" '
                 f'style="color:#38BDF8;text-decoration:none;">{a["title"]}</a></li>'
                 if a.get("link") else
-                f"<li>{a['title']}</li>"
+                f'<li><span style="color:#64748B;font-size:0.85em;margin-right:6px;">[{a.get("created_display") or "N/A"}]</span>{a["title"]}</li>'
                 for a in theme["articles"]
             )
             card = (
@@ -393,9 +405,9 @@ def render_tab8(scored_list, ticker_df):
         neg = [r for r in impact_rows if r["Net Score"] < 0]
         mix = [r for r in impact_rows if r["Net Score"] == 0]
 
-        display_cols_pos = ["Ticker", "Signal", "Macro +", "Mention +"]
-        display_cols_neg = ["Ticker", "Signal", "Macro -", "Mention -"]
-        display_cols_mix = ["Ticker", "Signal", "Macro +", "Macro -", "Mention +", "Mention -"]
+        display_cols_pos = ["Ticker", "Signal", "Macro +", "Mention +", "Latest Mention"]
+        display_cols_neg = ["Ticker", "Signal", "Macro -", "Mention -", "Latest Mention"]
+        display_cols_mix = ["Ticker", "Signal", "Macro +", "Macro -", "Mention +", "Mention -", "Latest Mention"]
 
         c1, c2 = st.columns(2)
         with c1:
@@ -428,7 +440,7 @@ def render_tab8(scored_list, ticker_df):
         if mention_detail:
             with st.expander("🔍 Detail Direct Mention per Ticker", expanded=False):
                 for r in mention_detail[:10]:
-                    st.markdown(f"**{r['Ticker']}** {r['Signal']}")
+                    st.markdown(f"**{r['Ticker']}** {r['Signal']} (Terakhir: {r['Latest Mention']})")
                     if r["_mention_pos_detail"]:
                         for h in r["_mention_pos_detail"][:3]:
                             st.markdown(f"  🟢 {h}")
@@ -486,14 +498,18 @@ def render_tab8(scored_list, ticker_df):
                             src = SOURCE_LABEL.get(h["source"], h["source"].upper())
                             link = h.get("link", "")
                             title = h["title"]
+                            c_disp = h.get("created_display", "")
+                            time_str = f" [{c_disp}]" if c_disp else ""
                             if link:
-                                st.markdown(f"  - [{src}] [{title}]({link})")
+                                st.markdown(f"  - [{src}]{time_str} [{title}]({link})")
                             else:
-                                st.markdown(f"  - [{src}] {title}")
+                                st.markdown(f"  - [{src}]{time_str} {title}")
+            return rows
         else:
             st.info("No news data found for current watchlist.")
     else:
         st.info("Refresh the live feed to analyze news.")
+    return []
 
 
 def _inject_news_countdown(next_ms: int):

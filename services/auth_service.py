@@ -24,6 +24,7 @@ class AuthService:
     def __init__(self) -> None:
         self._cache_path = Path(config.STOCKBIT_TOKEN_CACHE_PATH)
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self._last_refresh_attempt = 0.0
 
     async def get_token(self) -> str:
         """Return token. Priority: env var > cache > Obscura login."""
@@ -41,8 +42,14 @@ class AuthService:
             config.STOCKBIT_BEARER_TOKEN = cached["token"]
             return cached["token"]
 
+        # Throttle Obscura browser login attempts to once per 5 minutes
+        if time.time() - self._last_refresh_attempt < 300:
+            logger.warning("auth: token refresh throttled to prevent hanging. Returning cache or empty.")
+            return cached["token"] if cached else ""
+
         # 3. Login via Obscura (expired or missing)
         logger.info("auth: token is missing or expired. Refreshing...")
+        self._last_refresh_attempt = time.time()
         return await self.refresh_token()
 
     async def refresh_token(self, force: bool = False) -> str:

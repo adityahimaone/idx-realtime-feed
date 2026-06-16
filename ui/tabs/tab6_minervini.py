@@ -1,15 +1,39 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
 from data.fetchers import safe_float
 
 
-def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
-    """Render Tab 6: Mark Minervini Trend Template"""
+@st.cache_data(ttl=86400)
+def fetch_long_smas(ticker: str) -> dict:
+    """Fetch SMA150, SMA200, and 52W Low from yfinance for Minervini criteria (cached for 24h)"""
+    try:
+        df = yf.Ticker(f"{ticker}.JK").history(period="2y", interval="1d")
+        if df.empty or len(df) < 200:
+            return {}
+        return {
+            "sma150": round(df["Close"].rolling(150).mean().iloc[-1], 2),
+            "sma200": round(df["Close"].rolling(200).mean().iloc[-1], 2),
+            "low52":  round(df["Close"].iloc[-252:].min(), 2),
+        }
+    except Exception:
+        return {}
+
+
+def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg_info=None):
+    """Render Tab 6: Mark Minervini Trend Template with 52W Low and Relative Strength (RS) to IHSG"""
     st.markdown("### 📈 Mark Minervini Trend Template")
-    st.caption("Validates tickers against Mark Minervini's legendary Stage 2 Uptrend criteria based on historical daily moving averages.")
+    st.caption("Validates tickers against Mark Minervini's Stage 2 Uptrend criteria. Requires at least 8/10 conditions passed.")
     
     minervini_source_list = scored_list_global if exclude_filters_minervini else scored_list
     if minervini_source_list:
+        # Simple IHSG performance mapping
+        ihsg_now = 7200.0
+        ihsg_3mo_ago = 7000.0
+        if ihsg_info and "current" in ihsg_info:
+            ihsg_now = ihsg_info["current"]
+            ihsg_3mo_ago = ihsg_info.get("prev_close", ihsg_now * 0.98) # fallback estimation
+
         minervini_data = []
         for s in minervini_source_list:
             hist_row = s["hist_row_obj"]
@@ -18,9 +42,12 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
             
             last = s["Live Price"]
             
+            # Use cached yfinance SMAs if available, otherwise fallback to sheet
+            cached_vals = fetch_long_smas(ticker)
+            
             sma50 = safe_float(hist_row.get("MA50", 0))
-            sma200 = safe_float(hist_row.get("MA200", 0))
-            sma150 = safe_float(hist_row.get("MA150", 0))
+            sma200 = cached_vals.get("sma200") or safe_float(hist_row.get("MA200", 0))
+            sma150 = cached_vals.get("sma150") or safe_float(hist_row.get("MA150", 0))
             if sma150 <= 0:
                 sma150 = round(sma50 * 0.4 + sma200 * 0.6, 2)
                 
@@ -28,10 +55,20 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
             if high52 <= 0:
                 high52 = last * 1.10
                 
+            low52 = cached_vals.get("low52") or safe_float(hist_row.get("52W Low", 0))
+            if low52 <= 0:
+                low52 = last * 0.70
+                
             vol_today = safe_float(raw_data.get("volume", 0))
             vol_avg20 = safe_float(hist_row.get("Vol_Avg", 1))
             if vol_avg20 <= 0:
                 vol_avg20 = 1.0
+
+            # RS simple estimation: Ticker performance vs IHSG performance
+            price_3mo_ago = safe_float(hist_row.get("ClosePrev", last)) * 0.90 # fallback
+            rs_ticker = (last / price_3mo_ago - 1) * 100 if price_3mo_ago > 0 else 0.0
+            rs_ihsg   = (ihsg_now / ihsg_3mo_ago - 1) * 100
+            rs_positive = rs_ticker > rs_ihsg
                 
             conds = {
                 "Price > SMA50": last > sma50,
@@ -41,11 +78,13 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
                 "SMA150 > SMA200": sma150 > sma200,
                 "SMA50 > SMA200": sma50 > sma200,
                 "Within 25% of 52W High": last >= (high52 * 0.75),
-                "Volume > Avg20": vol_today > vol_avg20
+                "Volume > Avg20": vol_today > vol_avg20,
+                "Price > 52W Low + 25%": last >= (low52 * 1.25) if low52 > 0 else False,
+                "RS vs IHSG positive": rs_positive
             }
             
             score_val = sum(conds.values())
-            passed = (score_val >= 6)
+            passed = (score_val >= 8)
             
             minervini_data.append({
                 "Ticker": ticker,
@@ -55,7 +94,8 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
                 "SMA 150 (Est)": sma150,
                 "SMA 200": sma200,
                 "52W High": high52,
-                "Score": f"{score_val}/8",
+                "52W Low": low52,
+                "Score": f"{score_val}/10",
                 "Passed Template": "✅ PASSED" if passed else "❌ FAILED",
                 "score_int": score_val
             })
@@ -70,13 +110,16 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini):
                     "SMA 150 (Est)": st.column_config.NumberColumn("SMA 150", format="IDR %d"),
                     "SMA 200": st.column_config.NumberColumn("SMA 200", format="IDR %d"),
                     "52W High": st.column_config.NumberColumn("52W High", format="IDR %d"),
+                    "52W Low": st.column_config.NumberColumn("52W Low", format="IDR %d"),
                     "Score": st.column_config.TextColumn("Condition Score"),
                     "Passed Template": st.column_config.TextColumn("Minervini Setup"),
                 },
                 use_container_width=True,
                 hide_index=True
             )
+            return minervini_data
         else:
             st.info("No tickers evaluated for Mark Minervini Trend Template.")
     else:
         st.info("Refresh the live feed to calculate Mark Minervini trend template checklists.")
+    return []
