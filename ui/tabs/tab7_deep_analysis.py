@@ -10,7 +10,7 @@ from repositories.sqlite_repository import sqlite_repository
 WIB = __import__("pytz").timezone("Asia/Jakarta")
 
 
-def render_tab7(ticker_df, scored_list):
+def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
     """Render Tab 7: Deep Stock Analysis (Exodus API) with Wall Detection & Delta Tracking"""
     st.markdown("### 🔍 Deep Stock Analysis (Exodus API)")
     st.caption("Fetches real-time bid/ask queue details, detects walls, and tracks multi-snapshot deltas using SQLite history.")
@@ -30,6 +30,10 @@ def render_tab7(ticker_df, scored_list):
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             if st.button("🔍 Search Ticker", use_container_width=True):
                 st.session_state.deep_analyzed_ticker = search_input
+                # Force refresh by clearing cache
+                cache_key = f"sb_detail_{search_input}"
+                if cache_key in st.session_state:
+                    del st.session_state[cache_key]
                 st.rerun()
 
         if search_input and search_input != st.session_state.deep_analyzed_ticker:
@@ -52,9 +56,21 @@ def render_tab7(ticker_df, scored_list):
                         "source": "gsheet_fallback",
                         "source_ts": None
                     }
-                    
-                with st.spinner(f"⚡ Connecting to Exodus API for {selected_detail}..."):
-                    snap = asyncio.run(fetch_stockbit_detail(selected_detail))
+                
+                import time
+                cache_key = f"sb_detail_{selected_detail}"
+                time_key = f"sb_time_{selected_detail}"
+                snap = None
+                now = time.time()
+                
+                if cache_key in st.session_state and time_key in st.session_state and (now - st.session_state[time_key] < 10):
+                    snap = st.session_state[cache_key]
+                else:
+                    with st.spinner(f"⚡ Connecting to Exodus API for {selected_detail}..."):
+                        snap = asyncio.run(fetch_stockbit_detail(selected_detail))
+                        if snap:
+                            st.session_state[cache_key] = snap
+                            st.session_state[time_key] = now
                     
                 if snap:
                     # Override to st.session_state.screener_data
@@ -145,8 +161,29 @@ def render_tab7(ticker_df, scored_list):
                         </div>
                         """, unsafe_allow_html=True)
                     
+                    # Calculate position sizes
+                    base_portfolio = total_portfolio_value if total_portfolio_value > 0 else 100_000_000.0
+                    is_default_port = total_portfolio_value <= 0
+                    
+                    agg_entry = strategies['Aggressive']['entry']
+                    agg_lots = int((base_portfolio * 0.10) / (agg_entry * 100)) if agg_entry > 0 else 0
+                    agg_val = agg_lots * agg_entry * 100
+                    
+                    mod_entry = strategies['Moderat']['entry']
+                    mod_lots = int((base_portfolio * 0.15) / (mod_entry * 100)) if mod_entry > 0 else 0
+                    mod_val = mod_lots * mod_entry * 100
+                    
+                    low_entry = strategies['Low Risk']['entry']
+                    low_lots = int((base_portfolio * 0.20) / (low_entry * 100)) if low_entry > 0 else 0
+                    low_val = low_lots * low_entry * 100
+
                     # 3-Tier Strategies
                     st.markdown("### 🎯 Grounded 3-Tier Execution Strategies (Orderbook Based)")
+                    if is_default_port:
+                        st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
+                    else:
+                        st.caption(f"📊 *Sizing calculates dynamically from your actual active portfolio size: Rp {total_portfolio_value:,.0f}*")
+                        
                     sc1, sc2, sc3 = st.columns(3)
                     with sc1:
                         st.markdown(f"""
@@ -157,6 +194,7 @@ def render_tab7(ticker_df, scored_list):
                                 <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
+                                <li><b>Suggested Size (10%):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -169,6 +207,7 @@ def render_tab7(ticker_df, scored_list):
                                 <li><b>Target (TP):</b> IDR {strategies['Moderat']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Moderat']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Moderat']['rr']}x</li>
+                                <li><b>Suggested Size (15%):</b> <b style="color:#FFFF00;">{mod_lots:,} Lots</b> (Rp {mod_val:,.0f})</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -181,6 +220,7 @@ def render_tab7(ticker_df, scored_list):
                                 <li><b>Target (TP):</b> IDR {strategies['Low Risk']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Low Risk']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
+                                <li><b>Suggested Size (20%):</b> <b style="color:#00D4AA;">{low_lots:,} Lots</b> (Rp {low_val:,.0f})</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)

@@ -16,6 +16,8 @@ from ui.tabs.tab3_screener import render_tab3
 from ui.tabs.tab4_trending import render_tab4
 from ui.tabs.tab9_pre_ara import render_tab9
 from ui.tabs.tab10_elliott_wave import render_tab10
+from ui.tabs.tab7_deep_analysis import render_tab7
+from ui.components.status_bar import render_status_board, render_ihsg_widget
 
 # Mitigate yfinance cache locking issues in parallel execution
 try:
@@ -48,9 +50,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# CUSTOM CSS STYLING
-# ============================================================================
+from ui.components.styles import inject_css
+inject_css()
+
 st.markdown("""
 <style>
     .stApp {
@@ -668,564 +670,31 @@ def fetch_news_for_tickers(ticker_list):
             pass
     return results
 
-
 # ============================================================================
-# MACRO THEME DEFINITIONS & TICKER CORRELATION MAP
+# MODULAR IMPORTS: SCORING & NARRATIVES
 # ============================================================================
-MACRO_THEMES = {
-    "fed_rate_hike": {
-        "label": "The Fed Naikkan Suku Bunga",
-        "icon": "🏦",
-        "keywords": ["fed rate", "federal reserve", "rate hike", "suku bunga naik", "interest rate hike", "hawkish fed", "fomc hike"],
-        "impact": "negative",
-        "narrative": "Kenaikan suku bunga Fed → dollar menguat, capital outflow dari emerging market → tekanan di saham perbankan, properti, dan konsumer.",
-        "positive_sectors": ["banking_usd_heavy"],
-        "negative_tickers": ["BBCA", "BBRI", "BMRI", "BBNI", "BSDE", "SMRA", "CTRA", "ASRI", "LPKR", "UNVR", "ICBP", "MYOR"],
-        "positive_tickers": [],
-    },
-    "fed_rate_cut": {
-        "label": "The Fed Pangkas Suku Bunga",
-        "icon": "📉",
-        "keywords": ["fed rate cut", "rate cut", "dovish fed", "suku bunga turun", "interest rate cut", "fomc cut", "fed pivot"],
-        "impact": "positive",
-        "narrative": "Pemotongan suku bunga Fed → dollar melemah, capital inflow ke emerging market → positif untuk perbankan, properti, konsumer.",
-        "negative_tickers": [],
-        "positive_tickers": ["BBCA", "BBRI", "BMRI", "BBNI", "BSDE", "SMRA", "CTRA", "ASRI", "UNVR", "ICBP", "MYOR"],
-    },
-    "gold_up": {
-        "label": "Harga Emas Naik",
-        "icon": "🥇",
-        "keywords": ["gold rise", "gold price up", "emas naik", "harga emas melonjak", "gold rally", "xau naik", "emas menguat"],
-        "impact": "positive",
-        "narrative": "Harga emas naik → emiten tambang emas dan komoditas logam mulia diuntungkan.",
-        "negative_tickers": [],
-        "positive_tickers": ["ANTM", "EMAS", "ARCI", "MDKA", "BRMS", "PSAB"],
-    },
-    "gold_down": {
-        "label": "Harga Emas Turun",
-        "icon": "📉",
-        "keywords": ["gold fall", "gold price down", "emas turun", "harga emas anjlok", "gold drops", "xau turun", "emas melemah"],
-        "impact": "negative",
-        "narrative": "Harga emas turun → emiten tambang emas dan logam mulia tertekan.",
-        "negative_tickers": ["ANTM", "EMAS", "ARCI", "MDKA", "BRMS", "PSAB"],
-        "positive_tickers": [],
-    },
-    "coal_up": {
-        "label": "Harga Batu Bara Naik",
-        "icon": "⚫",
-        "keywords": ["coal price up", "batu bara naik", "harga batu bara melonjak", "coal rally", "thermal coal up"],
-        "impact": "positive",
-        "narrative": "Harga batu bara naik → emiten produsen batu bara diuntungkan secara langsung.",
-        "negative_tickers": [],
-        "positive_tickers": ["ADRO", "PTBA", "ITMG", "HRUM", "BSSR", "INDY", "PTRO", "DEWA"],
-    },
-    "coal_down": {
-        "label": "Harga Batu Bara Turun",
-        "icon": "📉",
-        "keywords": ["coal price down", "batu bara turun", "harga batu bara anjlok", "coal drops", "thermal coal down"],
-        "impact": "negative",
-        "narrative": "Harga batu bara turun → emiten batu bara tertekan, margin ekspor menyusut.",
-        "negative_tickers": ["ADRO", "PTBA", "ITMG", "HRUM", "BSSR", "INDY", "PTRO", "DEWA"],
-        "positive_tickers": [],
-    },
-    "cpo_up": {
-        "label": "Harga CPO/Sawit Naik",
-        "icon": "🌴",
-        "keywords": ["cpo price up", "palm oil up", "sawit naik", "harga cpo naik", "crude palm oil rise"],
-        "impact": "positive",
-        "narrative": "Harga CPO naik → emiten perkebunan sawit dan hilir kelapa sawit diuntungkan.",
-        "negative_tickers": [],
-        "positive_tickers": ["AALI", "SIMP", "LSIP", "SSMS", "TBLA", "TAPG", "MGRO"],
-    },
-    "cpo_down": {
-        "label": "Harga CPO/Sawit Turun",
-        "icon": "📉",
-        "keywords": ["cpo price down", "palm oil down", "sawit turun", "harga cpo turun", "crude palm oil falls"],
-        "impact": "negative",
-        "narrative": "Harga CPO turun → emiten sawit tertekan, revenue ekspor berkurang.",
-        "negative_tickers": ["AALI", "SIMP", "LSIP", "SSMS", "TBLA", "TAPG", "MGRO"],
-        "positive_tickers": [],
-    },
-    "rupiah_weak": {
-        "label": "Rupiah Melemah",
-        "icon": "💸",
-        "keywords": ["rupiah melemah", "kurs dolar naik", "idr weakens", "usd/idr naik", "rupiah depreciate", "nilai tukar melemah"],
-        "impact": "mixed",
-        "narrative": "Rupiah melemah → eksportir (komoditas, manufaktur ekspor) diuntungkan; importir, perbankan, dan saham berbiaya impor tinggi tertekan.",
-        "negative_tickers": ["UNVR", "ICBP", "MYOR", "INDF", "KLBF", "SIDO"],
-        "positive_tickers": ["ADRO", "PTBA", "ITMG", "ANTM", "AALI", "SIMP"],
-    },
-    "rupiah_strong": {
-        "label": "Rupiah Menguat",
-        "icon": "💪",
-        "keywords": ["rupiah menguat", "kurs dolar turun", "idr strengthens", "usd/idr turun", "rupiah appreciate"],
-        "impact": "mixed",
-        "narrative": "Rupiah menguat → importir dan saham berbiaya impor tinggi diuntungkan; eksportir komoditas sedikit tertekan.",
-        "negative_tickers": ["ADRO", "PTBA", "ITMG"],
-        "positive_tickers": ["UNVR", "ICBP", "MYOR", "INDF", "KLBF", "SIDO", "BBCA", "BBRI"],
-    },
-    "oil_up": {
-        "label": "Harga Minyak Naik",
-        "icon": "🛢️",
-        "keywords": ["oil price up", "crude oil rise", "minyak naik", "brent naik", "wti naik", "harga minyak melonjak"],
-        "impact": "mixed",
-        "narrative": "Minyak naik → emiten energi/migas diuntungkan; emiten dengan biaya energi tinggi seperti semen dan kimia tertekan.",
-        "negative_tickers": ["SMGR", "INTP", "TPIA"],
-        "positive_tickers": ["MEDC", "ENRG", "ELSA", "PGAS", "RUIS"],
-    },
-    "inflation_high": {
-        "label": "Inflasi Tinggi / CPI Melonjak",
-        "icon": "🔥",
-        "keywords": ["inflasi tinggi", "cpi naik", "inflation high", "inflation surge", "harga barang naik", "cost of living rise"],
-        "impact": "negative",
-        "narrative": "Inflasi tinggi → daya beli konsumen tertekan, margin konsumer goods menyusut, Bank Indonesia cenderung naikkan suku bunga.",
-        "negative_tickers": ["UNVR", "ICBP", "MYOR", "INDF", "SIDO", "KLBF", "BBCA", "BBRI"],
-        "positive_tickers": ["ANTM", "ITMG", "ADRO"],
-    },
-    "bi_rate_hike": {
-        "label": "Bank Indonesia Naikkan BI Rate",
-        "icon": "🏛️",
-        "keywords": ["bi rate naik", "bank indonesia naikkan suku bunga", "bi7drr naik", "bi rate hike", "suku bunga acuan naik"],
-        "impact": "negative",
-        "narrative": "BI naikkan suku bunga → cost of fund perbankan naik, cicilan meningkat, properti dan konsumer tertekan.",
-        "negative_tickers": ["BSDE", "SMRA", "CTRA", "ASRI", "LPKR", "UNVR", "ICBP"],
-        "positive_tickers": ["BBCA", "BBRI", "BMRI", "BBNI"],
-    },
-    "recession_fear": {
-        "label": "Ketakutan Resesi Global",
-        "icon": "😨",
-        "keywords": ["recession fear", "global recession", "resesi global", "economic slowdown", "gdp kontraksi", "perlambatan ekonomi"],
-        "impact": "negative",
-        "narrative": "Resesi global → permintaan komoditas turun, capital flight ke safe haven, saham cyclical dan komoditas tertekan.",
-        "negative_tickers": ["ADRO", "PTBA", "ITMG", "ANTM", "AALI", "INCO", "TINS"],
-        "positive_tickers": ["ICBP", "UNVR", "KLBF", "SIDO"],
-    },
-}
-
-
-@st.cache_data(ttl=600)
-def fetch_macro_news_yfinance() -> list[dict]:
-    """Fetch macro-relevant headlines from yfinance general market news."""
-    macro_queries = ["^JKSE", "IDR=X", "GC=F", "CL=F"]  # IHSG, USD/IDR, Gold futures, Crude Oil
-    articles = []
-    for symbol in macro_queries:
-        try:
-            t = yf.Ticker(symbol)
-            news = t.news or []
-            for item in news[:5]:
-                title = item.get("title", "")
-                link = item.get("link", "")
-                pub_ts = item.get("providerPublishTime", 0)
-                if title:
-                    articles.append({
-                        "title": title,
-                        "link": link,
-                        "source": symbol,
-                        "ts": pub_ts,
-                    })
-        except Exception:
-            pass
-    # Deduplicate by title
-    seen = set()
-    unique = []
-    for a in articles:
-        if a["title"] not in seen:
-            seen.add(a["title"])
-            unique.append(a)
-    return sorted(unique, key=lambda x: x["ts"], reverse=True)
-
-
-def fetch_stockbit_news_headlines() -> list[dict]:
-    """Fetch Stockbit News feed from Exodus non-login endpoint (no auth needed)."""
-    headlines = []
-    try:
-        url = "https://exodus.stockbit.com/stream/non-login/user/StockbitNews"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Accept": "application/json",
-        }
-        r = requests_cf.get(url, headers=headers, timeout=10, impersonate="chrome")
-        if r.status_code == 200:
-            data = r.json()
-            items = data.get("data", [])
-            for item in items[:30]:
-                title = item.get("title", "") or (item.get("content", "") or "")[:120]
-                if not title:
-                    continue
-                headlines.append({
-                    "title": title,
-                    "link": item.get("titleurl", ""),
-                    "source": "stockbit",
-                    "ts": item.get("created", 0),
-                    "created_display": item.get("created_display", ""),
-                    "content_preview": (item.get("content", "") or "")[:200],
-                    "topics": item.get("topics", []),
-                })
-    except Exception:
-        pass
-    return headlines
-
-
-def detect_macro_themes(articles: list[dict]) -> list[dict]:
-    """Match headlines against MACRO_THEMES, return triggered themes with matched articles."""
-    triggered = []
-    for theme_key, theme in MACRO_THEMES.items():
-        matched_articles = []
-        for article in articles:
-            title_l = article["title"].lower()
-            if any(kw in title_l for kw in theme["keywords"]):
-                matched_articles.append(article)
-        if matched_articles:
-            triggered.append({
-                "key": theme_key,
-                "label": theme["label"],
-                "icon": theme["icon"],
-                "impact": theme["impact"],
-                "narrative": theme["narrative"],
-                "positive_tickers": theme["positive_tickers"],
-                "negative_tickers": theme["negative_tickers"],
-                "articles": matched_articles[:3],
-            })
-    return triggered
-
-
-def build_ticker_impact_table(triggered_themes: list[dict], watchlist_tickers: list[str]) -> list[dict]:
-    """Cross-reference triggered macro themes with current watchlist tickers."""
-    impact_map = {}  # ticker -> {positive_themes, negative_themes}
-    for theme in triggered_themes:
-        for t in theme["positive_tickers"]:
-            if t in watchlist_tickers or not watchlist_tickers:
-                if t not in impact_map:
-                    impact_map[t] = {"positive": [], "negative": []}
-                impact_map[t]["positive"].append(theme["label"])
-        for t in theme["negative_tickers"]:
-            if t in watchlist_tickers or not watchlist_tickers:
-                if t not in impact_map:
-                    impact_map[t] = {"positive": [], "negative": []}
-                impact_map[t]["negative"].append(theme["label"])
-
-    rows = []
-    for ticker, impacts in impact_map.items():
-        pos_count = len(impacts["positive"])
-        neg_count = len(impacts["negative"])
-        net = pos_count - neg_count
-        if net > 0:
-            signal = "🟢 Positif"
-        elif net < 0:
-            signal = "🔴 Negatif"
-        else:
-            signal = "🟡 Mixed"
-        rows.append({
-            "Ticker": ticker,
-            "Signal": signal,
-            "Positif dari": ", ".join(impacts["positive"]) if impacts["positive"] else "-",
-            "Negatif dari": ", ".join(impacts["negative"]) if impacts["negative"] else "-",
-            "Net Score": net,
-        })
-    return sorted(rows, key=lambda x: x["Net Score"], reverse=True)
-
-# ============================================================================
-# SCORING & RECOMMENDATIONS ENGINE
-# ============================================================================
-def compute_intraday_score(data, hist_row) -> dict:
-    vol_avg = safe_float(hist_row.get("Vol_Avg", 0))
-    live_vol = safe_float(data.get("volume", 0))
-    vol_spike = (live_vol / vol_avg) if vol_avg > 0 else 1.0
-    
-    if vol_spike >= 3.0:
-        vol_score = 100
-    elif vol_spike >= 2.0:
-        vol_score = 80
-    elif vol_spike >= 1.5:
-        vol_score = 60
-    elif vol_spike >= 1.0:
-        vol_score = 40
-    else:
-        vol_score = 20
-        
-    # Standard fallback score for spread and imbalance in batch mode
-    imbalance_score = 60
-    spread_score = 60
-        
-    # Price Change% (20%)
-    last = safe_float(data.get("last", 0))
-    prev = safe_float(data.get("prev_close", 0))
-    chg = ((last - prev) / prev * 100) if prev > 0 else 0.0
-    
-    if chg >= 5.0:
-        price_score = 100
-    elif chg >= 2.0:
-        price_score = 80
-    elif chg >= 0.0:
-        price_score = 60
-    elif chg >= -3.0:
-        price_score = 40
-    else:
-        price_score = 20
-        
-    hist_score = safe_float(hist_row.get("Score v2", 50))
-    
-    total = (
-        vol_score * 0.25 +
-        imbalance_score * 0.25 +
-        price_score * 0.20 +
-        spread_score * 0.15 +
-        hist_score * 0.15
-    )
-    total = int(round(total))
-    
-    if total >= 85:
-        sig, col = "STRONG BUY", "#00D4AA"
-    elif total >= 70:
-        sig, col = "BUY", "#90EE90"
-    elif total >= 50:
-        sig, col = "HOLD", "#FFFF00"
-    elif total >= 30:
-        sig, col = "SELL", "#FFA500"
-    else:
-        sig, col = "STRONG SELL", "#FF6B6B"
-        
-    return {
-        "score": total,
-        "signal": sig,
-        "color": col,
-        "vol_spike": vol_spike,
-        "change_pct": chg,
-        "breakdown": {
-            "Volume Spike": vol_score,
-            "Price Intraday Change": price_score,
-            "Historical Score Weight": hist_score
-        }
-    }
-
-def compute_action_recommendation(price, sl, tp, score, rsi):
-    """Advanced R/R logic (similar to v27_rekomendasi_beli.py)."""
-    if price <= 0 or sl >= price:
-        return "❌ AVOID", "0%", "Invalid price levels"
-        
-    rr = round((tp - price) / (price - sl), 2)
-    
-    if rr >= 1.5 and score >= 70 and (rsi <= 0 or rsi < 75):
-        return "✅ STRONG BUY", "10%", f"R/R={rr} (Target: {tp}, SL: {sl}). Favorable setups."
-    if rr >= 1.2 and score >= 50 and (rsi <= 0 or rsi < 70):
-        return "⚡ BUY", "5%", f"R/R={rr} (Target: {tp}, SL: {sl}). Moderate buy."
-    if rr >= 1.0 and score >= 40:
-        return "🌀 SPECULATIVE", "2-3%", f"R/R={rr}. Higher volatility."
-    return "❌ AVOID", "0%", f"R/R={rr} (Target: {tp}, SL: {sl}). Below thresholds."
-
-def get_tick_size(price: float) -> int:
-    """IDX standard tick rules."""
-    if price < 200:
-        return 1
-    elif price < 500:
-        return 2
-    elif price < 2000:
-        return 5
-    elif price < 5000:
-        return 10
-    else:
-        return 25
-
-def align_price_to_tick(price: float, round_direction: str = "nearest") -> float:
-    """Align price to IDX tick size depending on requested direction."""
-    if price <= 0:
-        return 0.0
-    tick = get_tick_size(price)
-    if round_direction == "up":
-        return float(math.ceil(price / tick) * tick)
-    elif round_direction == "down":
-        return float(math.floor(price / tick) * tick)
-    else:
-        return float(round(price / tick) * tick)
-
-def calculate_strategies(price: float, score: int, signal: str) -> dict:
-    """Calculate 3-Tier execution strategy levels for a given price using ticker.py rules."""
-    # Aggressive (Breakout Play)
-    # Entry at best ask/price
-    entry_agg = price
-    tp_agg = entry_agg * 1.10
-    sl_agg = entry_agg * 0.95
-    
-    # Moderate (Pullback Play)
-    # Entry at 2 ticks below price
-    tick_size = get_tick_size(price)
-    entry_mod = price - 2 * tick_size
-    tp_mod = entry_mod * 1.05
-    sl_mod = entry_mod * 0.93
-    
-    # Low Risk (Support Buy)
-    # Entry at 4% support distance
-    entry_low = price - 4 * tick_size
-    tp_low = entry_low * 1.08
-    sl_low = entry_low * 0.96
-
-    # Align all values to ticks
-    entry_agg = align_price_to_tick(entry_agg)
-    tp_agg = align_price_to_tick(tp_agg)
-    sl_agg = align_price_to_tick(sl_agg)
-
-    entry_mod = align_price_to_tick(entry_mod)
-    tp_mod = align_price_to_tick(tp_mod)
-    sl_mod = align_price_to_tick(sl_mod)
-
-    entry_low = align_price_to_tick(entry_low)
-    tp_low = align_price_to_tick(tp_low)
-    sl_low = align_price_to_tick(sl_low)
-
-    # Risk-Reward calculations
-    rr_agg = round((tp_agg - entry_agg) / max(1.0, entry_agg - sl_agg), 1)
-    rr_mod = round((tp_mod - entry_mod) / max(1.0, entry_mod - sl_mod), 1)
-    rr_low = round((tp_low - entry_low) / max(1.0, entry_low - sl_low), 1)
-    
-    # Alloc sizes based on signal strength
-    if "STRONG BUY" in signal:
-        alloc_agg = "10% Port"
-        alloc_mod = "15% Port"
-        alloc_low = "20% Port"
-    elif "BUY" in signal:
-        alloc_agg = "5% Port"
-        alloc_mod = "10% Port"
-        alloc_low = "15% Port"
-    else:
-        alloc_agg = "1-2% (Speculative)"
-        alloc_mod = "3% Port"
-        alloc_low = "5% Port"
-        
-    return {
-        "Aggressive": {
-            "entry": entry_agg,
-            "target": tp_agg,
-            "sl": sl_agg,
-            "rr": rr_agg,
-            "size": alloc_agg
-        },
-        "Moderate": {
-            "entry": entry_mod,
-            "target": tp_mod,
-            "sl": sl_mod,
-            "rr": rr_mod,
-            "size": alloc_mod
-        },
-        "Low Risk": {
-            "entry": entry_low,
-            "target": tp_low,
-            "sl": sl_low,
-            "rr": rr_low,
-            "size": alloc_low
-        }
-    }
-
-def minify_html(html_str: str) -> str:
-    """Minify HTML string by removing newlines and leading indentation spaces."""
-    return "".join(line.strip() for line in html_str.split("\n"))
+from data.news import (
+    MACRO_THEMES,
+    fetch_macro_news_yfinance,
+    fetch_stockbit_news_headlines,
+    detect_macro_themes,
+    build_ticker_impact_table
+)
+from data.scoring import (
+    compute_intraday_score,
+    compute_action_recommendation,
+    get_tick_size,
+    align_price_to_tick,
+    calculate_strategies,
+    minify_html
+)
 
 
 # ============================================================================
 # MAIN INTERFACE
 # ============================================================================
 st.title("📈 IDX Intraday Multi-Source Screener [IRW]")
-
-# ============================================================================
-# LIVE TIME & API STATUS BOARD
-# ============================================================================
-now_wib = datetime.now(WIB)
-is_day_trade = now_wib.weekday() < 5 and (
-    (now_wib.hour == 9 and now_wib.minute >= 0) or
-    (now_wib.hour > 9 and now_wib.hour < 16) or
-    (now_wib.hour == 16 and now_wib.minute == 0)
-)
-
-badge_text = "LIVE 🔴" if is_day_trade else "CLOSED ⏸️"
-badge_color = "#10B981" if is_day_trade else "#F59E0B"
-badge_bg = "rgba(16,185,129,0.15)" if is_day_trade else "rgba(245,158,11,0.15)"
-badge_border = "rgba(16,185,129,0.3)" if is_day_trade else "rgba(245,158,11,0.3)"
-sb_auth_ok = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
-sb_status_dot = "pulse-green" if sb_auth_ok else "pulse-orange"
-sb_status_text = "Ready (Deep Analysis)" if sb_auth_ok else "Unavailable (Missing Token)"
-
-status_html = f"""
-<style>
-    .status-container {{ display:flex; flex-wrap:wrap; gap:12px 18px; align-items:center; padding:14px 18px; border-radius:12px; background:#1A202C; color:#E2E8F0; border:1px solid #2D3748; }}
-    .status-item {{ display:flex; align-items:center; gap:8px; font-size:0.9em; }}
-    .live-label-container {{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:6px; font-weight:700; font-size:0.8em; }}
-    @keyframes pulse-green-anim {{ 0% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,.7); }} 70% {{ transform:scale(1); box-shadow:0 0 0 6px rgba(16,185,129,0); }} 100% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(16,185,129,0); }} }}
-    @keyframes pulse-orange-anim {{ 0% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(245,158,11,.7); }} 70% {{ transform:scale(1); box-shadow:0 0 0 6px rgba(245,158,11,0); }} 100% {{ transform:scale(.95); box-shadow:0 0 0 0 rgba(245,158,11,0); }} }}
-    .pulse-dot {{ width:10px; height:10px; border-radius:50%; display:inline-block; }}
-    .pulse-green {{ background:#10B981; box-shadow:0 0 0 0 rgba(16,185,129,.7); animation:pulse-green-anim 2s infinite; }}
-    .pulse-orange {{ background:#F59E0B; box-shadow:0 0 0 0 rgba(245,158,11,.7); animation:pulse-orange-anim 2s infinite; }}
-</style>
-<div class="status-container">
-    <div class="status-item">
-        <strong>Market Status:</strong>
-        <span id="market_status_badge" class="live-label-container" style="background-color:{badge_bg};color:{badge_color};border:1px solid {badge_border};">{badge_text}</span>
-        <span id="realtime_clock_span" style="font-family:monospace;font-size:0.95em;">{now_wib.strftime('%Y-%m-%d %H:%M:%S')}</span>
-        <span style="color:#94A3B8;font-size:0.85em;">WIB</span>
-    </div>
-    <div class="status-item">
-        <span class="pulse-dot pulse-green"></span>
-        <span><strong>Google Sheets:</strong> Connected (Active Pool)</span>
-    </div>
-    <div class="status-item">
-        <span class="pulse-dot pulse-green"></span>
-        <span><strong>Yahoo Finance:</strong> Online (JK Feed)</span>
-    </div>
-    <div class="status-item">
-        <span class="pulse-dot pulse-green"></span>
-        <span><strong>IDX Endpoint:</strong> Online (Trading Summary)</span>
-    </div>
-    <div class="status-item">
-        <span class="pulse-dot {sb_status_dot}"></span>
-        <span><strong>Exodus API:</strong> {sb_status_text}</span>
-    </div>
-    <hr style="width:100%;border:0;border-top:1px solid #2D3748;margin:8px 0;">
-    <div style="color:#64748B;font-size:0.8em;">Freshness Fallback Pipeline: Google Sheets ➔ yfinance ➔ IDX. (Stockbit for Deep Analysis only).</div>
-</div>
-
-<script>
-(function() {{
-    function getWIB() {{
-        var now = new Date();
-        var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        return new Date(utc + (3600000 * 7));
-    }}
-
-    function pad(n) {{ return String(n).padStart(2, '0'); }}
-
-    function isMarketOpen(w) {{
-        var day = w.getDay(), h = w.getHours(), m = w.getMinutes();
-        if (day < 1 || day > 5) return false;
-        return (h === 9) || (h > 9 && h < 16) || (h === 16 && m === 0);
-    }}
-
-    function tick() {{
-        var w = getWIB();
-        var clockEl = document.getElementById('realtime_clock_span');
-        var badgeEl = document.getElementById('market_status_badge');
-
-        if (!clockEl) {{
-            clockEl = window.parent.document.getElementById('realtime_clock_span');
-            badgeEl = window.parent.document.getElementById('market_status_badge');
-        }}
-
-        if (clockEl) {{
-            clockEl.textContent = w.getFullYear() + '-' + pad(w.getMonth()+1) + '-' + pad(w.getDate()) + ' ' + pad(w.getHours()) + ':' + pad(w.getMinutes()) + ':' + pad(w.getSeconds());
-        }}
-
-        if (badgeEl) {{
-            var open = isMarketOpen(w);
-            badgeEl.textContent = open ? 'LIVE 🔴' : 'CLOSED ⏸️';
-            badgeEl.style.backgroundColor = open ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
-            badgeEl.style.color = open ? '#10B981' : '#F59E0B';
-            badgeEl.style.borderColor = open ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)';
-        }}
-    }}
-
-    tick();
-    setInterval(tick, 1000);
-}})();
-</script>
-"""
-st.components.v1.html(status_html, height=160, scrolling=False)
+render_status_board()
 
 # ============================================================================
 # IHSG DATA FETCH WITH FALLBACKS
@@ -1316,25 +785,36 @@ def fetch_ihsg_google_finance() -> dict | None:
         import re, bs4
         soup = bs4.BeautifulSoup(r.text, "html.parser")
 
-        # Price: div[data-last-price] or the big text element
-        price_el = soup.select_one("div.YMlKec.fxKbKc")
+        # Robust selector: data-last-price attribute or standard YMlKec class
+        price_el = soup.select_one("[data-last-price]") or soup.select_one(".YMlKec")
         if not price_el:
             return None
 
-        price_text = price_el.get_text(strip=True).replace(",", "").replace(".", "")
-        price = float(price_text[:-2] + "." + price_text[-2:])  # handle formatting
+        if price_el.has_attr("data-last-price"):
+            price = float(price_el["data-last-price"])
+        else:
+            price_text = price_el.get_text(strip=True).replace(",", "")
+            price_match = re.search(r"(\d+[\d.]*)", price_text)
+            if not price_match:
+                return None
+            price = float(price_match.group(1))
 
-        # Change: the span[data-change] nearby
-        change_el = soup.select_one("div.P6K39c")
-        change_text = change_el.get_text(strip=True) if change_el else "0"
-
-        # Parse change text like "+12.34 (0.56%)"
-        change_match = re.search(r"([+-]?\d+[\d,.]*)", change_text.replace(",", ""))
-        change_val = float(change_match.group(1)) if change_match else 0.0
-
-        # Pct change from second group in parentheses
-        pct_match = re.search(r"\(([+-]?\d+[\d,.]*)%\)", change_text)
-        change_pct = float(pct_match.group(1)) if pct_match else 0.0
+        # Change element parsing
+        change_el = soup.select_one("[data-last-normal-market-change]") or soup.select_one(".P6K39c")
+        if change_el and change_el.has_attr("data-last-normal-market-change"):
+            change_val = float(change_el["data-last-normal-market-change"])
+            # Pct change
+            change_pct = 0.0
+            pct_el = soup.select_one("[data-last-normal-market-change-percent]")
+            if pct_el and pct_el.has_attr("data-last-normal-market-change-percent"):
+                change_pct = float(pct_el["data-last-normal-market-change-percent"])
+        else:
+            change_text = change_el.get_text(strip=True) if change_el else "0"
+            change_match = re.search(r"([+-]?\d+[\d,.]*)", change_text.replace(",", ""))
+            change_val = float(change_match.group(1)) if change_match else 0.0
+            
+            pct_match = re.search(r"\(([+-]?\d+[\d,.]*)%\)", change_text)
+            change_pct = float(pct_match.group(1)) if pct_match else 0.0
 
         prev_close = price - change_val
 
@@ -1406,91 +886,51 @@ def fetch_ihsg_data() -> dict | None:
 # IHSG LIVE CARD
 # ============================================================================
 ihsg = fetch_ihsg_data()
-if ihsg:
-    is_up      = ihsg["change_abs"] >= 0
-    chg_color  = "#10B981" if is_up else "#EF4444"
-    chg_arrow  = "▲" if is_up else "▼"
-    chg_bg     = "rgba(16,185,129,0.08)" if is_up else "rgba(239,68,68,0.08)"
-    chg_border = "rgba(16,185,129,0.25)" if is_up else "rgba(239,68,68,0.25)"
+render_ihsg_widget(ihsg)
 
-    if ihsg.get("sparkline") and ihsg["prices"]:
-        prices_js  = str([round(p, 2) for p in ihsg["prices"]])
-        times_js   = str(ihsg["times"])
-        min_p      = round(min(ihsg["prices"]) * 0.9995, 2)
-        max_p      = round(max(ihsg["prices"]) * 1.0005, 2)
-        line_color = "#10B981" if is_up else "#EF4444"
-        fill_color = "rgba(16,185,129,0.12)" if is_up else "rgba(239,68,68,0.12)"
-        open_str   = f"O <b style='color:#CBD5E1;'>{ihsg['open']:,.2f}</b>" if ihsg.get("open") else ""
-        high_str   = f"H <b style='color:#10B981;'>{ihsg['high']:,.2f}</b>" if ihsg.get("high") else ""
-        low_str    = f"L <b style='color:#EF4444;'>{ihsg['low']:,.2f}</b>" if ihsg.get("low") else ""
-        prev_str   = f"Prev <b style='color:#CBD5E1;'>{ihsg['prev_close']:,.2f}</b>"
-        vol_str    = f"Vol <b style='color:#CBD5E1;'>{ihsg['volume']/1e9:.2f}B</b>" if ihsg.get("volume") else ""
-
-        ihsg_html = f"""
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
-<div id="ihsg_widget" style="background:#161B27;border:1px solid #2D3748;border-radius:14px;padding:16px 20px;display:flex;gap:24px;align-items:center;margin-bottom:4px;">
-  <div style="flex:0 0 auto;">
-    <div style="font-size:0.75em;color:#64748B;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-family:Inter,sans-serif;">IHSG / IDX Composite</div>
-    <div style="font-size:2.1em;font-weight:800;color:#F1F5F9;font-family:Inter,sans-serif;line-height:1.1;margin-top:2px;">{ihsg['current']:,.2f}</div>
-    <div style="display:inline-flex;align-items:center;gap:6px;margin-top:5px;padding:3px 10px;border-radius:20px;background:{chg_bg};border:1px solid {chg_border};">
-      <span style="color:{chg_color};font-weight:700;font-size:0.95em;font-family:Inter,sans-serif;">{chg_arrow} {abs(ihsg['change_abs']):,.2f} ({abs(ihsg['change_pct']):.2f}%)</span>
+# ============================================================================
+# DATA PIPELINE HEALTH MONITOR
+# ============================================================================
+st.markdown("##### 🛠️ Data Pipeline fallback health status")
+hc1, hc2, hc3, hc4 = st.columns(4)
+with hc1:
+    st.markdown("""
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
+        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Google Sheets</span>
+        <div style="font-size:0.75em; color:#94A3B8;">Primary registry active pool</div>
     </div>
-    <div style="display:flex;gap:14px;margin-top:10px;font-size:0.78em;color:#94A3B8;font-family:Inter,sans-serif;">
-      {open_str} {high_str} {low_str} {prev_str} {vol_str}
+    """, unsafe_allow_html=True)
+with hc2:
+    st.markdown("""
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
+        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Yahoo Finance</span>
+        <div style="font-size:0.75em; color:#94A3B8;">Intraday JK composite sparklines</div>
     </div>
-    <div style="margin-top:5px;font-size:0.72em;color:#475569;font-family:Inter,sans-serif;">Sumber: {ihsg['source']} · refresh tiap 60 detik</div>
-  </div>
-  <div style="flex:1;min-width:0;height:90px;position:relative;">
-    <canvas id="ihsg_chart" style="width:100%;height:90px;"></canvas>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
-(function(){{
-  var prices={prices_js};
-  var labels={times_js};
-  function init(){{
-    var el=document.getElementById('ihsg_chart');
-    if(!el){{el=window.parent.document.getElementById('ihsg_chart');}}
-    if(!el)return;
-    var ctx=el.getContext('2d');
-    var grad=ctx.createLinearGradient(0,0,0,90);
-    grad.addColorStop(0,'{fill_color}');
-    grad.addColorStop(1,'rgba(0,0,0,0)');
-    new Chart(ctx,{{
-      type:'line',
-      data:{{labels:labels,datasets:[{{data:prices,borderColor:'{line_color}',borderWidth:2,backgroundColor:grad,fill:true,pointRadius:0,tension:0.3}}]}},
-      options:{{
-        responsive:true,maintainAspectRatio:false,
-        plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:function(c){{return ' '+c.parsed.y.toLocaleString('id-ID',{{minimumFractionDigits:2}}); }}}}}}}},
-        scales:{{x:{{display:false}},y:{{display:false,min:{min_p},max:{max_p}}}}},
-        animation:{{duration:400}}
-      }}
-    }});
-  }}
-  if(document.readyState==='loading'){{document.addEventListener('DOMContentLoaded',init);}}else{{init();}}
-}})();
-</script>
-"""
-        st.components.v1.html(ihsg_html, height=175, scrolling=False)
-    else:
-        # Fallback: price/change only card (Google Finance scrape — no sparkline)
-        st.markdown(f"""
-<div style="background:#161B27;border:1px solid #2D3748;border-radius:14px;padding:16px 20px;margin-bottom:4px;">
-  <div style="font-size:0.75em;color:#64748B;font-weight:600;letter-spacing:.08em;text-transform:uppercase;">IHSG / IDX Composite</div>
-  <div style="font-size:2.1em;font-weight:800;color:#F1F5F9;">{ihsg['current']:,.2f}</div>
-  <div style="color:{chg_color};font-weight:700;margin-top:4px;">{chg_arrow} {abs(ihsg['change_abs']):,.2f} ({abs(ihsg['change_pct']):.2f}%)</div>
-  <div style="margin-top:6px;font-size:0.72em;color:#475569;">Sumber: {ihsg['source']} (no sparkline) · refresh tiap 120 detik</div>
-</div>
-""", unsafe_allow_html=True)
-else:
-    st.caption("⚠️ IHSG data tidak tersedia di semua sumber (Yahoo Finance + Google Finance timeout).")
+    """, unsafe_allow_html=True)
+with hc3:
+    st.markdown("""
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
+        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Google Finance</span>
+        <div style="font-size:0.75em; color:#94A3B8;">Cascading scraper fallback</div>
+    </div>
+    """, unsafe_allow_html=True)
+with hc4:
+    st.markdown("""
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
+        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Exodus Stockbit API</span>
+        <div style="font-size:0.75em; color:#94A3B8;">Orderbook queue engine</div>
+    </div>
+    """, unsafe_allow_html=True)
+st.write("")
 
 # Load database
 ticker_df = load_ticker_pool()
 if ticker_df.empty:
     st.warning("Ticker database is empty or spreadsheet is unreachable.")
     st.stop()
+
+# Single source of truth for hist_lookup (O(N) vectorized map)
+hist_lookup = ticker_df.set_index("Clean Ticker").to_dict(orient="index")
 
 # Initialize session state for cached data
 if "screener_data" not in st.session_state:
@@ -1529,116 +969,17 @@ for _, row in ticker_df.iterrows():
 # ============================================================================
 # SIDEBAR FILTERS
 # ============================================================================
-with st.sidebar:
-    st.markdown("## 🔍 Screener Settings")
-    st.markdown("---")
-    
-    # Check if query params tells us to scan
-    if st.query_params.get("auto_scan", "false") == "true":
-        st.session_state["trigger_auto_scan"] = True
-        st.query_params["auto_scan"] = "false"
-
-    # Auto refresh configuration
-    st.subheader("🔁 Auto Refresh")
-    init_auto_refresh = st.query_params.get("auto_refresh", "false") == "true"
-    init_interval = int(st.query_params.get("refresh_interval", "10"))
-    if init_interval not in [5, 10, 15, 30]:
-        init_interval = 10
-
-    auto_refresh_enabled = st.checkbox("Enable Auto Refresh", value=init_auto_refresh, help="Automatically re-trigger scan cycle.")
-    if auto_refresh_enabled:
-        interval_options = [5, 10, 15, 30]
-        interval_index = interval_options.index(init_interval) if init_interval in interval_options else 1
-        refresh_interval = st.selectbox(
-            "Interval (Minutes)",
-            options=interval_options,
-            index=interval_index,
-            help="Choose refresh period."
-        )
-        
-        # Sync query params if changed
-        if st.query_params.get("auto_refresh") != "true" or st.query_params.get("refresh_interval") != str(refresh_interval):
-            st.query_params["auto_refresh"] = "true"
-            st.query_params["refresh_interval"] = str(refresh_interval)
-            
-        import time
-        if "next_refresh_time" not in st.session_state or st.session_state.get("last_refresh_interval") != refresh_interval:
-            st.session_state.next_refresh_time = time.time() + (refresh_interval * 60)
-            st.session_state.last_refresh_interval = refresh_interval
-            
-        time_left = int(st.session_state.next_refresh_time - time.time())
-        if time_left <= 0:
-            if not st.session_state.get("auto_scan_triggered", False):
-                st.session_state.next_refresh_time = time.time() + (refresh_interval * 60)
-                st.session_state["trigger_auto_scan"] = True
-                st.session_state["auto_scan_triggered"] = True
-        else:
-            st.session_state["auto_scan_triggered"] = False
-            time_display = f"{time_left // 60}m {time_left % 60}s"
-            target_time = int(st.session_state.next_refresh_time * 1000)
-            countdown_html = f"""<div id="countdown_wrapper" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);padding:10px;border-radius:8px;color:#38BDF8;font-weight:700;font-size:0.9em;margin-bottom:10px;text-align:left;">
-⏳ Next auto-scan in: <span id="countdown_timer_span">{time_display}</span>
-</div>
-<script>
-(function(){{
-var target={target_time},interval={refresh_interval},t=setInterval(function(){{
-var d=Math.max(0,Math.floor((target-Date.now())/1000)),s=document.getElementById("countdown_timer_span");
-if(s)s.textContent=Math.floor(d/60)+"m "+(d%60)+"s";
-if(d<=0){{clearInterval(t);s.textContent="0m 0s (Scan Complete)";var l=window.location;try{{if(window.parent&&window.parent.location)l=window.parent.location;}}catch(e){{}}l.href=l.pathname+"?auto_refresh=true&auto_scan=true&refresh_interval="+interval;}}
-}},1000);
-}})();
-</script>"""
-            st.components.v1.html(countdown_html, height=48)
-    else:
-        if st.query_params.get("auto_refresh") == "true":
-            st.query_params["auto_refresh"] = "false"
-
-    st.markdown("---")
-    
-    # Delay selector
-    st.subheader("⏱️ Fetch Polling Delay")
-    fetch_delay = st.slider(
-        "Delay per Ticker (seconds)",
-        min_value=0.1,
-        max_value=3.0,
-        value=0.5,
-        step=0.1,
-        help="Rate-limiting sleep duration between ticker queries."
-    )
-    
-    # Max tickers scan
-    st.subheader("📊 Scan Ticker Limit")
-    max_scan = st.slider(
-        "Max Tickers to Scan",
-        min_value=10,
-        max_value=min(500, len(ticker_df)) if not ticker_df.empty else 100,
-        value=50,
-        step=10,
-        help="Limit the number of tickers to scan in a batch."
-    )
-    
-    st.markdown("---")
-    
-    # Filters
-    st.subheader("🎯 Watchlist Filter")
-    unique_sectors = sorted(list(ticker_df["Sector"].unique())) if "Sector" in ticker_df.columns else []
-    selected_sectors = st.multiselect("Sectors", unique_sectors, default=[])
-    
-    unique_ranks = sorted(list(ticker_df["Rank"].unique())) if "Rank" in ticker_df.columns else []
-    selected_ranks = st.multiselect("Ranks", unique_ranks, default=["⭐ Strong Buy"])
-    
-    min_score = st.slider("Minimum Historical Score v2", 0, 100, 50)
-    
-    st.markdown("---")
-    st.subheader("⚙️ Tab Scope Options")
-    exclude_filters_trending = st.checkbox("Exclude filters for Trending Stocks", value=True, help="Display all matching tickers regardless of Ranks/Sectors.")
-    exclude_filters_bsjp = st.checkbox("Exclude filters for BSJP", value=True, help="Display all BSJP setups regardless of Ranks/Sectors.")
-    exclude_filters_minervini = st.checkbox("Exclude filters for Minervini Trend", value=True, help="Display all Minervini setups regardless of Ranks/Sectors.")
-    
-    st.markdown("---")
-    
-    # Manual Ticker Lookup
-    search_ticker = st.text_input("Lookup Specific Ticker (e.g. ADRO)", "").upper().strip()
+from ui.components.sidebar import render_sidebar
+sidebar_data = render_sidebar(ticker_df, fetch_screener_batch)
+fetch_delay = sidebar_data["fetch_delay"]
+max_scan = sidebar_data["max_scan"]
+selected_sectors = sidebar_data["selected_sectors"]
+selected_ranks = sidebar_data["selected_ranks"]
+min_score = sidebar_data["min_score"]
+exclude_filters_trending = sidebar_data["exclude_filters_trending"]
+exclude_filters_bsjp = sidebar_data["exclude_filters_bsjp"]
+exclude_filters_minervini = sidebar_data["exclude_filters_minervini"]
+search_ticker = sidebar_data["search_ticker"]
 
 # ============================================================================
 # FILTER TICKERS
@@ -1750,7 +1091,6 @@ with col_info:
 scored_list = []
 scored_list_global = []
 if st.session_state.screener_data:
-    hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
     
     # Global population for unfiltered tabs
     for ticker, data in st.session_state.screener_data.items():
@@ -1805,6 +1145,22 @@ if st.session_state.screener_data:
             "foreign_sell": data.get("foreign_sell", 0.0)
         })
 
+# Calculate active total portfolio value dynamically
+total_portfolio_value = 0.0
+if st.session_state.portfolio:
+    for asset in st.session_state.portfolio:
+        ticker = asset["Ticker"]
+        buy_price = asset["Buy Price"]
+        lots = asset["Lots"]
+        live_price = buy_price
+        if ticker in hist_lookup:
+            hist_row = hist_lookup[ticker]
+            if ticker in st.session_state.screener_data:
+                live_price = st.session_state.screener_data[ticker]["last"]
+            else:
+                live_price = safe_float(hist_row.get("Price"), buy_price)
+        total_portfolio_value += live_price * lots * 100
+
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
@@ -1858,7 +1214,6 @@ with tab_wl:
     # Watchlist Table
     if st.session_state.custom_watchlist:
         wl_data = []
-        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
         
         for ticker in st.session_state.custom_watchlist:
             if ticker in hist_lookup:
@@ -1978,7 +1333,6 @@ with tab_port:
         port_rows = []
         total_invested = 0.0
         total_current_val = 0.0
-        hist_lookup = {row["Clean Ticker"]: row.to_dict() for _, row in ticker_df.iterrows()}
         
         for asset in st.session_state.portfolio:
             ticker = asset["Ticker"]
@@ -2099,8 +1453,7 @@ with tab6:
     minervini_data = render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg)
 
 with tab7:
-    from ui.tabs.tab7_deep_analysis import render_tab7
-    render_tab7(ticker_df, scored_list)
+    render_tab7(ticker_df, scored_list, total_portfolio_value=total_portfolio_value)
 
 with tab8:
     news_data = render_tab8(scored_list, ticker_df)

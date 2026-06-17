@@ -8,6 +8,7 @@ from curl_cffi import requests as requests_cf
 WIB = __import__("pytz").timezone("Asia/Jakarta")
 
 
+@st.cache_data(ttl=300)
 def fetch_idx_calendar(date_str: str) -> list[dict]:
     """Fetch corporate calendar from IDX website."""
     url = f"https://www.idx.co.id/primary/Home/GetCalendar?range=m&date={date_str}"
@@ -16,7 +17,7 @@ def fetch_idx_calendar(date_str: str) -> list[dict]:
         if r.status_code == 200:
             return r.json().get("Results", [])
     except Exception as e:
-        st.error(f"Failed to fetch IDX Calendar: {e}")
+        pass
     return []
 
 

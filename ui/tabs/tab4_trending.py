@@ -5,6 +5,7 @@ from data.scoring import trending_score, trend_tier
 from curl_cffi import requests as requests_cf
 
 
+@st.cache_data(ttl=300)
 def fetch_idx_ranking(ranking_type: str, limit: int = 7) -> list[dict]:
     """Fetch official rankings from IDX.
 

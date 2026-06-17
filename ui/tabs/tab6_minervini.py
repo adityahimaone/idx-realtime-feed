@@ -6,15 +6,21 @@ from data.fetchers import safe_float
 
 @st.cache_data(ttl=86400)
 def fetch_long_smas(ticker: str) -> dict:
-    """Fetch SMA150, SMA200, and 52W Low from yfinance for Minervini criteria (cached for 24h)"""
+    """Fetch SMA150, SMA200, 52W Low, 52W High, and 3-Month Ago Price from yfinance (cached for 24h)"""
     try:
         df = yf.Ticker(f"{ticker}.JK").history(period="2y", interval="1d")
         if df.empty or len(df) < 200:
             return {}
+        
+        lookback_252 = min(len(df), 252)
+        lookback_63 = min(len(df), 63)
+        
         return {
             "sma150": round(df["Close"].rolling(150).mean().iloc[-1], 2),
             "sma200": round(df["Close"].rolling(200).mean().iloc[-1], 2),
-            "low52":  round(df["Close"].iloc[-252:].min(), 2),
+            "low52":  round(df["Low"].iloc[-lookback_252:].min(), 2),
+            "high52": round(df["High"].iloc[-lookback_252:].max(), 2),
+            "price_3mo_ago": round(df["Close"].iloc[-lookback_63], 2),
         }
     except Exception:
         return {}
@@ -51,7 +57,7 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg
             if sma150 <= 0:
                 sma150 = round(sma50 * 0.4 + sma200 * 0.6, 2)
                 
-            high52 = safe_float(hist_row.get("52W High", 0))
+            high52 = cached_vals.get("high52") or safe_float(hist_row.get("52W High", 0))
             if high52 <= 0:
                 high52 = last * 1.10
                 
@@ -64,8 +70,8 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg
             if vol_avg20 <= 0:
                 vol_avg20 = 1.0
 
-            # RS simple estimation: Ticker performance vs IHSG performance
-            price_3mo_ago = safe_float(hist_row.get("ClosePrev", last)) * 0.90 # fallback
+            # RS computation: Ticker performance vs IHSG performance
+            price_3mo_ago = cached_vals.get("price_3mo_ago") or (safe_float(hist_row.get("ClosePrev", last)) * 0.90)
             rs_ticker = (last / price_3mo_ago - 1) * 100 if price_3mo_ago > 0 else 0.0
             rs_ihsg   = (ihsg_now / ihsg_3mo_ago - 1) * 100
             rs_positive = rs_ticker > rs_ihsg
