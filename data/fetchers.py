@@ -278,20 +278,25 @@ class _OrderLevel:
 
 
 class _OrderbookSnap:
-    def __init__(self, last_price, change_pct, imbalance_ratio, total_bid_lot, bid_levels, ask_levels):
+    def __init__(self, last_price, change_pct, imbalance_ratio, total_bid_lot, bid_levels, ask_levels, open_price=0.0, high=0.0, low=0.0, volume=0.0, prev_close=0.0):
         self.last_price = last_price
         self.change_pct = change_pct
         self.imbalance_ratio = imbalance_ratio
         self.total_bid_lot = total_bid_lot
         self.bid_levels = bid_levels
         self.ask_levels = ask_levels
+        self.open_price = open_price
+        self.high = high
+        self.low = low
+        self.volume = volume
+        self.prev_close = prev_close
 
 
 def _parse_orderbook_snap(symbol, payload):
     try:
         data = payload.get("data", payload)
-        last_price = safe_float(data.get("lastPrice") or data.get("last_price", 0))
-        prev_close = safe_float(data.get("prevClose") or data.get("prev_close", last_price))
+        last_price = safe_float(data.get("lastPrice") or (data.get("last_price") or data.get("lastprice", 0)))
+        prev_close = safe_float(data.get("prevClose") or (data.get("prev_close") or (data.get("previous") or last_price)))
         change_pct = ((last_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
         bids_raw = data.get("bid", data.get("bids", []))
         asks_raw = data.get("offer", data.get("asks", data.get("offers", [])))
@@ -306,7 +311,14 @@ def _parse_orderbook_snap(symbol, payload):
         total_bid = sum(l.lot for l in bid_levels)
         total_ask = sum(l.lot for l in ask_levels)
         imbalance = total_bid / total_ask if total_ask > 0 else 1.0
-        return _OrderbookSnap(last_price, change_pct, imbalance, total_bid, bid_levels, ask_levels)
+        open_price = safe_float(data.get("open", last_price))
+        high = safe_float(data.get("high", last_price))
+        low = safe_float(data.get("low", last_price))
+        volume = safe_float(data.get("volume", 0))
+        return _OrderbookSnap(
+            last_price, change_pct, imbalance, total_bid, bid_levels, ask_levels,
+            open_price=open_price, high=high, low=low, volume=volume, prev_close=prev_close
+        )
     except Exception:
         return None
 
@@ -333,7 +345,12 @@ async def fetch_stockbit_detail(symbol):
                         imbalance,
                         total_bid,
                         snap.bid_levels,
-                        snap.ask_levels
+                        snap.ask_levels,
+                        open_price=snap.open_price,
+                        high=snap.high,
+                        low=snap.low,
+                        volume=snap.volume,
+                        prev_close=snap.prev_close
                     )
             finally:
                 await provider.close()

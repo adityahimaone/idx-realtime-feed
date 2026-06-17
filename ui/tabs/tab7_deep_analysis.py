@@ -57,6 +57,20 @@ def render_tab7(ticker_df, scored_list):
                     snap = asyncio.run(fetch_stockbit_detail(selected_detail))
                     
                 if snap:
+                    # Override to st.session_state.screener_data
+                    st.session_state.screener_data[selected_detail] = {
+                        "last": snap.last_price,
+                        "open": snap.open_price if snap.open_price else snap.last_price,
+                        "high": snap.high if snap.high else snap.last_price,
+                        "low": snap.low if snap.low else snap.last_price,
+                        "volume": snap.volume,
+                        "prev_close": snap.prev_close,
+                        "source": "stockbit",
+                        "source_ts": datetime.now(WIB),
+                        "report": "Stockbit Exodus Live Direct (Deep Analysis Override)"
+                    }
+                    st.toast(f"✅ Price overrides updated for {selected_detail} to {snap.last_price}!")
+
                     # Save snapshot levels to SQLite for delta tracking
                     for lvl in snap.bid_levels:
                         sqlite_repository.save_orderbook_snapshot(selected_detail, "bid", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
