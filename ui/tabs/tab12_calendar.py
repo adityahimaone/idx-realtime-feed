@@ -21,6 +21,88 @@ def fetch_idx_calendar(date_str: str) -> list[dict]:
 
 
 def render_tab12():
+    st.markdown("""
+<style>
+    /* Styling Calendar Header weekdays */
+    .cal-grid-header {
+        text-align: center;
+        font-weight: 800;
+        color: #94A3B8;
+        text-transform: uppercase;
+        font-size: 0.8em;
+        letter-spacing: 0.1em;
+        margin-bottom: 12px;
+        padding-bottom: 4px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Sleek card hover transformations for alerts */
+    .rec-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%) !important;
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border-radius: 12px !important;
+        padding: 16px !important;
+        position: relative;
+        overflow: hidden;
+    }
+    .rec-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+        transform: translateX(-100%);
+        transition: transform 0.5s;
+    }
+    .rec-card:hover::before {
+        transform: translateX(100%);
+    }
+    .rec-card:hover {
+        transform: translateY(-4px) scale(1.02) !important;
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.4) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    /* Calendar Button Overrides to make them look like professional grid cells */
+    .stButton > button {
+        border-radius: 8px !important;
+        height: 50px !important;
+        font-weight: 600 !important;
+        font-size: 0.95em !important;
+        transition: all 0.2s ease-in-out !important;
+        background: rgba(30, 41, 59, 0.3) !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        color: #E2E8F0 !important;
+    }
+    
+    /* Secondary (standard day with no events) hover */
+    .stButton > button:hover {
+        background: rgba(30, 41, 59, 0.8) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        color: #FFFFFF !important;
+        transform: scale(1.05);
+    }
+    
+    /* Primary buttons (currently selected day) */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%) !important;
+        border: 1px solid #60A5FA !important;
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.5) !important;
+        color: #FFFFFF !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%) !important;
+        box-shadow: 0 0 16px rgba(96, 165, 250, 0.7) !important;
+        transform: scale(1.05);
+    }
+</style>
+""", unsafe_allow_html=True)
+
     st.markdown("### 📅 IDX Corporate Calendar & Event Signals")
     st.caption("Interactive monthly calendar and event-driven signals for IDX corporate actions.")
 
@@ -128,26 +210,34 @@ def render_tab12():
     # ============================================================================
     if h1_alerts:
         st.markdown("#### 🔔 Tomorrow's Event Alerts (H-1 Signals)")
-        for alert in h1_alerts:
-            border_color = (
-                "#10B981" if "🟢" in alert["H-1 Signal Analysis"]
-                else "#EF4444" if "🔴" in alert["H-1 Signal Analysis"]
-                else "#F59E0B"
-            )
-            card_html = (
-                f'<div class="rec-card" style="border-left:5px solid {border_color};margin-bottom:12px;padding:12px;background:#1E293B;border-radius:6px;">'
-                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-                f'<strong style="font-size:1.15em;color:#F8FAFC;">⚠️ H-1 ALERT: {alert["Ticker"]} ({alert["Event Type"]})</strong>'
-                f'<span style="background:{border_color}33;color:{border_color};padding:2px 8px;border-radius:4px;font-size:0.8em;font-weight:700;margin-left:auto;">'
-                f'{alert["H-1 Signal Analysis"]}</span>'
-                f'</div>'
-                f'<div style="margin-top:6px;font-size:0.9em;color:#E2E8F0;">'
-                f'<strong>Event:</strong> {alert["Description"]}<br/>'
-                f'<strong>Notes:</strong> {alert["Action Notes"]}<br/>'
-                f'{f"<strong>Time/Location:</strong> {alert.get(\'RUPS Time\',\'-\')} @ {alert.get(\'Location\',\'-\')}" if alert["Event Type"].lower() == "rups" else ""}'
-                f'</div></div>'
-            )
-            st.markdown(card_html, unsafe_allow_html=True)
+        for idx in range(0, len(h1_alerts), 3):
+            cols = st.columns(3)
+            for col_idx in range(3):
+                if idx + col_idx < len(h1_alerts):
+                    alert = h1_alerts[idx + col_idx]
+                    border_color = (
+                        "#10B981" if "🟢" in alert["H-1 Signal Analysis"]
+                        else "#EF4444" if "🔴" in alert["H-1 Signal Analysis"]
+                        else "#F59E0B"
+                    )
+                    card_html = (
+                        f'<div class="rec-card" style="border-left:5px solid {border_color};margin-bottom:12px;display:flex;flex-direction:column;justify-content:space-between;height:180px;">'
+                        f'<div>'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+                        f'<strong style="font-size:1.15em;color:#F8FAFC;letter-spacing:0.02em;">🚀 {alert["Ticker"]}</strong>'
+                        f'<span style="background:{border_color}18;color:{border_color};padding:3px 8px;border-radius:6px;font-size:0.75em;font-weight:800;border:1px solid {border_color}33;">'
+                        f'{alert["Event Type"]}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.85em;color:#94A3B8;line-height:1.4;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">'
+                        f'{alert["Description"]}'
+                        f'</div>'
+                        f'</div>'
+                        f'<div style="background:{border_color}08;padding:8px 10px;border-radius:6px;font-size:0.78em;color:#E2E8F0;border:1px solid {border_color}20;display:flex;align-items:center;">'
+                        f'{alert["H-1 Signal Analysis"]}'
+                        f'</div>'
+                        f'</div>'
+                    )
+                    cols[col_idx].markdown(card_html, unsafe_allow_html=True)
         st.markdown("---")
 
     # ============================================================================
@@ -157,12 +247,11 @@ def render_tab12():
     
     # Calculate month ranges
     first_weekday, num_days = calendar.monthrange(selected_year, selected_month)
-    # first_weekday: 0=Monday, 6=Sunday. Let's map to Mon-Sun header columns
     
     headers = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     for i, h in enumerate(headers):
-        cols[i].markdown(f"<p style='text-align:center;font-weight:700;color:#94A3B8;'>{h}</p>", unsafe_allow_html=True)
+        cols[i].markdown(f"<p class='cal-grid-header'>{h}</p>", unsafe_allow_html=True)
 
     # Render days
     day_counter = 1
