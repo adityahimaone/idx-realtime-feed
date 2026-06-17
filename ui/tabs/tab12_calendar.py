@@ -134,21 +134,19 @@ def render_tab12():
                 else "#EF4444" if "🔴" in alert["H-1 Signal Analysis"]
                 else "#F59E0B"
             )
-            card_html = f"""
-            <div class="rec-card" style="border-left:5px solid {border_color};margin-bottom:12px;padding:12px;background:#1E293B;border-radius:6px;">
-                <div style="display:flex;justify-content:between;align-items:center;">
-                    <strong style="font-size:1.15em;color:#F8FAFC;">⚠️ H-1 ALERT: {alert['Ticker']} ({alert['Event Type']})</strong>
-                    <span style="background:{border_color}33;color:{border_color};padding:2px 8px;border-radius:4px;font-size:0.8em;font-weight:700;margin-left:auto;">
-                        {alert['H-1 Signal Analysis']}
-                    </span>
-                </div>
-                <div style="margin-top:6px;font-size:0.9em;color:#E2E8F0;">
-                    <strong>Event:</strong> {alert['Description']}<br/>
-                    <strong>Notes:</strong> {alert['Action Notes']}<br/>
-                    {f"<strong>Time/Location:</strong> {alert['RUPS Time']} @ {alert['Location']}" if alert['Event Type'].lower() == 'rups' else ""}
-                </div>
-            </div>
-            """
+            card_html = (
+                f'<div class="rec-card" style="border-left:5px solid {border_color};margin-bottom:12px;padding:12px;background:#1E293B;border-radius:6px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<strong style="font-size:1.15em;color:#F8FAFC;">⚠️ H-1 ALERT: {alert["Ticker"]} ({alert["Event Type"]})</strong>'
+                f'<span style="background:{border_color}33;color:{border_color};padding:2px 8px;border-radius:4px;font-size:0.8em;font-weight:700;margin-left:auto;">'
+                f'{alert["H-1 Signal Analysis"]}</span>'
+                f'</div>'
+                f'<div style="margin-top:6px;font-size:0.9em;color:#E2E8F0;">'
+                f'<strong>Event:</strong> {alert["Description"]}<br/>'
+                f'<strong>Notes:</strong> {alert["Action Notes"]}<br/>'
+                f'{f"<strong>Time/Location:</strong> {alert.get(\'RUPS Time\',\'-\')} @ {alert.get(\'Location\',\'-\')}" if alert["Event Type"].lower() == "rups" else ""}'
+                f'</div></div>'
+            )
             st.markdown(card_html, unsafe_allow_html=True)
         st.markdown("---")
 
