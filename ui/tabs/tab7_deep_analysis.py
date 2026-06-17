@@ -62,6 +62,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                 time_key = f"sb_time_{selected_detail}"
                 snap = None
                 now = time.time()
+                was_fresh_fetch = False
                 
                 if cache_key in st.session_state and time_key in st.session_state and (now - st.session_state[time_key] < 10):
                     snap = st.session_state[cache_key]
@@ -71,6 +72,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         if snap:
                             st.session_state[cache_key] = snap
                             st.session_state[time_key] = now
+                            was_fresh_fetch = True
                     
                 if snap:
                     # Override to st.session_state.screener_data
@@ -85,13 +87,18 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         "source_ts": datetime.now(WIB),
                         "report": "Stockbit Exodus Live Direct (Deep Analysis Override)"
                     }
-                    st.toast(f"✅ Price overrides updated for {selected_detail} to {snap.last_price}!")
+                    
+                    # Refresh raw_data_obj with the overridden values
+                    raw_data_obj = st.session_state.screener_data[selected_detail]
 
-                    # Save snapshot levels to SQLite for delta tracking
-                    for lvl in snap.bid_levels:
-                        sqlite_repository.save_orderbook_snapshot(selected_detail, "bid", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
-                    for lvl in snap.ask_levels:
-                        sqlite_repository.save_orderbook_snapshot(selected_detail, "ask", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
+                    if was_fresh_fetch:
+                        st.toast(f"✅ Price overrides updated for {selected_detail} to {snap.last_price}!")
+
+                        # Save snapshot levels to SQLite for delta tracking
+                        for lvl in snap.bid_levels:
+                            sqlite_repository.save_orderbook_snapshot(selected_detail, "bid", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
+                        for lvl in snap.ask_levels:
+                            sqlite_repository.save_orderbook_snapshot(selected_detail, "ask", lvl.price, lvl.lot, getattr(lvl, 'freq', 0))
 
                     # Fetch previous snapshots from SQLite for delta analysis
                     history = sqlite_repository.get_latest_orderbook_snapshots(selected_detail, limit=40)
@@ -183,6 +190,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
                     else:
                         st.caption(f"📊 *Sizing calculates dynamically from your actual active portfolio size: Rp {total_portfolio_value:,.0f}*")
+                    st.caption("⚠️ *Penting: Pilih salah satu skenario entry di bawah yang paling sesuai dengan aksi pasar nyata — jangan mengambil kombinasi ketiganya sekaligus (total 45% portofolio).*")
                         
                     sc1, sc2, sc3 = st.columns(3)
                     with sc1:

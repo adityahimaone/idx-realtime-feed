@@ -11,18 +11,18 @@ from core.logger import logger
 # Constants
 WIB = pytz.timezone("Asia/Jakarta")
 
-def safe_float(v):
+def safe_float(v, default=0.0):
     if v is None or v == "":
-        return 0.0
+        return default
     try:
         if isinstance(v, str):
             v = v.replace(",", "").replace("%", "").strip()
         f = float(v)
         if math.isnan(f) or math.isinf(f):
-            return 0.0
+            return default
         return f
     except (ValueError, TypeError):
-        return 0.0
+        return default
 
 @st.cache_data(ttl=300)
 def load_ticker_pool(sheets_repository):

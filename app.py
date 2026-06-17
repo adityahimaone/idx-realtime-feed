@@ -317,18 +317,18 @@ st.markdown("""
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
-def safe_float(v):
+def safe_float(v, default=0.0):
     if v is None or v == "":
-        return 0.0
+        return default
     try:
         if isinstance(v, str):
             v = v.replace(",", "").replace("%", "").strip()
         f = float(v)
         if math.isnan(f) or math.isinf(f):
-            return 0.0
+            return default
         return f
     except (ValueError, TypeError):
-        return 0.0
+        return default
 
 @st.cache_data(ttl=300)
 def load_ticker_pool():
@@ -601,93 +601,9 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
     return results
 
 # ============================================================================
-# LIVE DEEP ANALYSIS FETCH (EXODUS API)
-# ============================================================================
-async def fetch_stockbit_detail(ticker: str):
-    """Deep analysis orderbook fetch from Stockbit Exodus API endpoint."""
-    token = await auth_service.get_token()
-    if not token:
-        return None
-    provider = StockbitProvider(token)
-    try:
-        snap = await provider.fetch_orderbook(ticker)
-        await provider.close()
-        return snap
-    except Exception as e:
-        logger.error(f"Exodus API detail fetch failed for {ticker}: {e}")
-        await provider.close()
-        return None
-
-async def fetch_stockbit_trending():
-    """Fetch live trending stocks list from unofficial Stockbit Exodus API."""
-    token = await auth_service.get_token()
-    if not token:
-        return []
-    url = "https://exodus.stockbit.com/trending/stocks"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Referer": "https://stockbit.com/",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-    }
-    try:
-        r = await asyncio.to_thread(
-            requests_cf.get, url, headers=headers, timeout=15, impersonate="chrome"
-        )
-        if r.status_code == 200:
-            return r.json().get("data", [])
-    except Exception as e:
-        logger.error(f"Exodus API trending fetch failed: {e}")
-    return []
-
-# fetch_ihsg_data() defined below with multi-source fallback
-
-
-@st.cache_data(ttl=300)
-def fetch_news_for_tickers(ticker_list):
-    """Fetch yfinance news for a list of IDX tickers."""
-    results = {}
-    positive_kw = ['naik', 'tumbuh', 'laba', 'positif', 'dividen', 'akuisisi', 'ekspansi', 'profit', 'growth', 'rise', 'gain', 'upgrade', 'buy', 'bullish', 'outperform']
-    negative_kw = ['turun', 'rugi', 'gagal', 'krisis', 'kasus', 'utang', 'debt', 'loss', 'downgrade', 'sell', 'bearish', 'crash', 'tunda', 'henti']
-    
-    for ticker in ticker_list:
-        try:
-            stock = yf.Ticker(f"{ticker}.JK")
-            news = stock.news
-            if news and isinstance(news, list):
-                headlines = [article.get('title', '') for article in news[:5]]
-                sentiment = 0
-                for title in headlines:
-                    title_l = title.lower()
-                    sentiment += sum(1 for kw in positive_kw if kw in title_l)
-                    sentiment -= sum(1 for kw in negative_kw if kw in title_l)
-                
-                results[ticker] = {
-                    'count': len(headlines),
-                    'latest': headlines[0] if headlines else '',
-                    'sentiment': sentiment / len(headlines) if headlines else 0
-                }
-        except Exception:
-            pass
-    return results
-
-# ============================================================================
 # MODULAR IMPORTS: SCORING & NARRATIVES
 # ============================================================================
-from data.news import (
-    MACRO_THEMES,
-    fetch_macro_news_yfinance,
-    fetch_stockbit_news_headlines,
-    detect_macro_themes,
-    build_ticker_impact_table
-)
-from data.scoring import (
-    compute_intraday_score,
-    compute_action_recommendation,
-    get_tick_size,
-    align_price_to_tick,
-    calculate_strategies,
-    minify_html
-)
+from data.scoring import compute_intraday_score
 
 
 # ============================================================================
@@ -889,36 +805,67 @@ ihsg = fetch_ihsg_data()
 render_ihsg_widget(ihsg)
 
 # ============================================================================
+# ============================================================================
 # DATA PIPELINE HEALTH MONITOR
 # ============================================================================
 st.markdown("##### 🛠️ Data Pipeline fallback health status")
+
+# Determine real-time status dynamically based on connection flags
+# 1. Google Sheets
+gsheet_active = "load_ticker_pool" in globals() and bool(config.MARKET_ALPHA_SPREADSHEET_ID)
+gs_bg = "rgba(16, 185, 129, 0.08)" if gsheet_active else "rgba(239, 68, 68, 0.08)"
+gs_border = "rgba(16, 185, 129, 0.2)" if gsheet_active else "rgba(239, 68, 68, 0.2)"
+gs_dot = "#10B981" if gsheet_active else "#EF4444"
+gs_desc = "Primary registry active pool" if gsheet_active else "Registry connection error"
+
+# 2. Yahoo Finance
+yf_active = ihsg is not None and ihsg.get("source") in ("Yahoo Finance", "Yahoo Finance API")
+yf_bg = "rgba(16, 185, 129, 0.08)" if yf_active else "rgba(245, 158, 11, 0.08)"
+yf_border = "rgba(16, 185, 129, 0.2)" if yf_active else "rgba(245, 158, 11, 0.2)"
+yf_dot = "#10B981" if yf_active else "#F59E0B"
+yf_desc = f"Active Composite source ({ihsg.get('source', 'Offline') if ihsg else 'Offline'})" if yf_active else "Composite source degraded (Fallback active)"
+
+# 3. Google Finance
+gf_active = ihsg is not None and ihsg.get("source") == "Google Finance"
+gf_bg = "rgba(16, 185, 129, 0.08)" if gf_active else "rgba(100, 116, 139, 0.08)"
+gf_border = "rgba(16, 185, 129, 0.2)" if gf_active else "rgba(100, 116, 139, 0.2)"
+gf_dot = "#10B981" if gf_active else "#64748B"
+gf_desc = "Cascading scraper fallback (Active)" if gf_active else "Scraper idle (Standby)"
+
+# 4. Exodus Stockbit API
+sb_active = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
+sb_bg = "rgba(16, 185, 129, 0.08)" if sb_active else "rgba(239, 68, 68, 0.08)"
+sb_border = "rgba(16, 185, 129, 0.2)" if sb_active else "rgba(239, 68, 68, 0.2)"
+sb_dot = "#10B981" if sb_active else "#EF4444"
+sb_desc = "Orderbook queue engine (Authorized)" if sb_active else "Unauthorized (Credentials missing)"
+
 hc1, hc2, hc3, hc4 = st.columns(4)
 with hc1:
-    st.markdown("""
-    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
-        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Google Sheets</span>
-        <div style="font-size:0.75em; color:#94A3B8;">Primary registry active pool</div>
+    st.markdown(f"""
+    <div style="background: {gs_bg}; border: 1px solid {gs_border}; padding: 8px 12px; border-radius: 8px;">
+        <span style="color:{gs_dot}; font-weight:700; font-size:0.85em;">● Google Sheets</span>
+        <div style="font-size:0.75em; color:#94A3B8;">{gs_desc}</div>
     </div>
     """, unsafe_allow_html=True)
 with hc2:
-    st.markdown("""
-    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
-        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Yahoo Finance</span>
-        <div style="font-size:0.75em; color:#94A3B8;">Intraday JK composite sparklines</div>
+    st.markdown(f"""
+    <div style="background: {yf_bg}; border: 1px solid {yf_border}; padding: 8px 12px; border-radius: 8px;">
+        <span style="color:{yf_dot}; font-weight:700; font-size:0.85em;">● Yahoo Finance</span>
+        <div style="font-size:0.75em; color:#94A3B8;">{yf_desc}</div>
     </div>
     """, unsafe_allow_html=True)
 with hc3:
-    st.markdown("""
-    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
-        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Google Finance</span>
-        <div style="font-size:0.75em; color:#94A3B8;">Cascading scraper fallback</div>
+    st.markdown(f"""
+    <div style="background: {gf_bg}; border: 1px solid {gf_border}; padding: 8px 12px; border-radius: 8px;">
+        <span style="color:{gf_dot}; font-weight:700; font-size:0.85em;">● Google Finance</span>
+        <div style="font-size:0.75em; color:#94A3B8;">{gf_desc}</div>
     </div>
     """, unsafe_allow_html=True)
 with hc4:
-    st.markdown("""
-    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 12px; border-radius: 8px;">
-        <span style="color:#10B981; font-weight:700; font-size:0.85em;">● Exodus Stockbit API</span>
-        <div style="font-size:0.75em; color:#94A3B8;">Orderbook queue engine</div>
+    st.markdown(f"""
+    <div style="background: {sb_bg}; border: 1px solid {sb_border}; padding: 8px 12px; border-radius: 8px;">
+        <span style="color:{sb_dot}; font-weight:700; font-size:0.85em;">● Exodus Stockbit API</span>
+        <div style="font-size:0.75em; color:#94A3B8;">{sb_desc}</div>
     </div>
     """, unsafe_allow_html=True)
 st.write("")
