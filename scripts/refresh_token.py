@@ -428,6 +428,53 @@ def verify_token(token: str) -> bool:
 
 async def main():
     console = Console()
+
+    # Check if we already have a valid token in the cache or env
+    try:
+        from services.auth_service import auth_service
+        from core.config import config
+        
+        # 1. Check if env token is already valid
+        env_token = config.STOCKBIT_BEARER_TOKEN
+        if env_token and not auth_service._is_jwt_expired(env_token):
+            console.print("[green]✓ Current STOCKBIT_BEARER_TOKEN in .env is already valid![/green]")
+            verify_token(env_token)
+            still_refresh = Confirm.ask("\nDo you still want to force refresh/login?", default=False)
+            if not still_refresh:
+                # Ask to run the main script
+                run_main = Confirm.ask("\nDo you want to run the main script (main.py) now?", default=True)
+                if run_main:
+                    console.print("\n[bold green]🚀 Starting idx-realtime-feed main.py...[/bold green]\n")
+                    try:
+                        subprocess.run([sys.executable, "main.py"])
+                    except KeyboardInterrupt:
+                        console.print("\n[yellow]Stopped main.py.[/yellow]")
+                return
+                
+        # 2. Check if cache token is valid and update env if so
+        else:
+            cached = auth_service._read_cache()
+            if cached and not auth_service._is_expired(cached) and not auth_service._is_jwt_expired(cached["token"]):
+                token = cached["token"]
+                console.print(f"[green]✓ Found valid cached token. Auto-updating .env...[/green]")
+                verify_token(token)
+                if update_env(token):
+                    console.print("[bold green]✔ .env file updated successfully with valid cached token![/bold green]")
+                    config.STOCKBIT_BEARER_TOKEN = token
+                    still_refresh = Confirm.ask("\nDo you still want to force refresh/login?", default=False)
+                    if not still_refresh:
+                        # Ask to run the main script
+                        run_main = Confirm.ask("\nDo you want to run the main script (main.py) now?", default=True)
+                        if run_main:
+                            console.print("\n[bold green]🚀 Starting idx-realtime-feed main.py...[/bold green]\n")
+                            try:
+                                subprocess.run([sys.executable, "main.py"])
+                            except KeyboardInterrupt:
+                                console.print("\n[yellow]Stopped main.py.[/yellow]")
+                        return
+    except Exception as e:
+        console.print(f"[yellow]⚠️ Could not verify existing tokens: {e}[/yellow]")
+
     console.print(Panel(
         "[bold green]📈 Stockbit Token Refresher[/bold green]\n\n"
         "This script intercepts the authorization token from stockbit.com\n"

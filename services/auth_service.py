@@ -38,6 +38,12 @@ class AuthService:
         cached = self._read_cache()
         if cached and not self._is_expired(cached) and not self._is_jwt_expired(cached["token"]):
             logger.debug("auth: using valid cached token")
+            # Auto-update env if missing or different
+            if not env_token or env_token != cached["token"]:
+                try:
+                    self._write_env(cached["token"])
+                except Exception as e:
+                    logger.error(f"auth: failed to auto-update env with cached token: {e}")
             # Also update config.STOCKBIT_BEARER_TOKEN in case env was old
             config.STOCKBIT_BEARER_TOKEN = cached["token"]
             return cached["token"]
