@@ -73,7 +73,10 @@ def grounded_three_tier(price: float, bid_walls: list[WallSignal],
     resistance = strongest_ask.price if strongest_ask else round(price * 1.05, 0)
     support = strongest_bid.price if strongest_bid else round(price * 0.95, 0)
 
-    agg_entry, agg_tp, agg_sl = resistance, round(resistance * 1.05, 0), round(price * 0.97, 0)
+    agg_entry = price
+    agg_tp = resistance
+    agg_sl = round(price * 0.97, 0)
+    
     mod_entry = round((price + support) / 2, 0)
     mod_tp, mod_sl = resistance, round(support * 0.98, 0)
     low_entry, low_sl = support, round(support * 0.97, 0)
