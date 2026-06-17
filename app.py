@@ -1808,7 +1808,7 @@ if st.session_state.screener_data:
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
-tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1 = st.tabs([
+tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1, tab_cal = st.tabs([
     "🏆 Top Picks",
     "🎯 Intraday Buy Recommendations",
     "⭐ Custom Watchlist",
@@ -1821,7 +1821,8 @@ tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, 
     "📈 Minervini Trend",
     "📰 News-Based Signals",
     "🌊 Elliott Wave",
-    "📋 Active Tickers Pool"
+    "📋 Active Tickers Pool",
+    "📅 Corporate Calendar"
 ])
 
 # ============================================================================
@@ -2120,4 +2121,8 @@ with tab11:
         trending_rows=trending_data,
         news_sentiment_rows=news_data
     )
+
+with tab_cal:
+    from ui.tabs.tab12_calendar import render_tab12
+    render_tab12()
 
