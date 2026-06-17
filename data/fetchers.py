@@ -314,6 +314,34 @@ def _parse_orderbook_snap(symbol, payload):
 async def fetch_stockbit_detail(symbol):
     """Fetch live orderbook snapshot from Stockbit Exodus API."""
     try:
+        from services.auth_service import auth_service
+        from providers.stockbit_provider import StockbitProvider
+        
+        token = await auth_service.get_token()
+        if token:
+            provider = StockbitProvider(token)
+            try:
+                snap = await provider.fetch_orderbook(symbol)
+                if snap:
+                    total_bid = sum(l.lot for l in snap.bid_levels)
+                    total_ask = sum(l.lot for l in snap.ask_levels)
+                    imbalance = total_bid / total_ask if total_ask > 0 else 1.0
+                    change_pct = ((snap.last_price - snap.prev_close) / snap.prev_close * 100) if snap.prev_close > 0 else 0.0
+                    return _OrderbookSnap(
+                        snap.last_price,
+                        change_pct,
+                        imbalance,
+                        total_bid,
+                        snap.bid_levels,
+                        snap.ask_levels
+                    )
+            finally:
+                await provider.close()
+    except Exception as exc:
+        from core.logger import logger
+        logger.error(f"fetch_stockbit_detail authenticated fetch failed: {exc}")
+
+    try:
         url = f"https://exodus.stockbit.com/stock/{symbol}/orderbook"
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
