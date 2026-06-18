@@ -1373,6 +1373,72 @@ with tab_port:
     else:
         st.info("Portfolio is empty. Add assets using the fields above.")
 
+    # ========================================================================
+    # AVERAGE DOWN / DCA CALCULATOR
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("### 🔄 Average Down Calculator")
+    st.caption(
+        "Simulasikan dampak average down terhadap harga rata-rata, jarak breakeven, "
+        "dan konsentrasi risiko sebelum eksekusi. Average down memperbesar eksposur "
+        "di satu saham — gunakan dengan disiplin, bukan reaksi otomatis saat posisi rugi."
+    )
+
+    if st.session_state.portfolio:
+        dca_ticker = st.selectbox(
+            "Pilih posisi yang ingin di-average down",
+            options=[a["Ticker"] for a in st.session_state.portfolio],
+            key="dca_ticker_select"
+        )
+        asset = next(a for a in st.session_state.portfolio if a["Ticker"] == dca_ticker)
+        old_avg = asset["Buy Price"]
+        old_lots = asset["Lots"]
+        live_price = st.session_state.screener_data.get(dca_ticker, {}).get("last", old_avg)
+
+        dca_col1, dca_col2 = st.columns(2)
+        with dca_col1:
+            dca_price_mode = st.radio(
+                "Harga beli tambahan", ["Live Price", "Custom"],
+                horizontal=True, key="dca_price_mode"
+            )
+            dca_price = live_price if dca_price_mode == "Live Price" else st.number_input(
+                "Harga custom (IDR)", min_value=1.0, value=float(live_price), step=1.0, key="dca_custom_price"
+            )
+        with dca_col2:
+            dca_lots = st.number_input("Lot tambahan", min_value=1, value=old_lots, step=1, key="dca_lots_input")
+
+        new_lots = old_lots + dca_lots
+        new_invested = (old_avg * old_lots * 100) + (dca_price * dca_lots * 100)
+        new_avg = new_invested / (new_lots * 100)
+        breakeven_gap_pct = ((new_avg - live_price) / live_price * 100) if live_price > 0 else 0.0
+        ticker_concentration = (new_invested / total_portfolio_value * 100) if total_portfolio_value > 0 else 0.0
+
+        st.markdown("##### 📊 Hasil Simulasi")
+        rc1, rc2, rc3, rc4 = st.columns(4)
+        rc1.metric("Avg Lama → Baru", f"Rp {old_avg:,.0f} → Rp {new_avg:,.0f}")
+        rc2.metric("Total Lot Baru", f"{new_lots:,} lot")
+        rc3.metric(
+            "Jarak ke Breakeven", f"{breakeven_gap_pct:+.2f}%",
+            help="Positif = live price masih perlu naik sekian % untuk balik modal dari avg baru."
+        )
+        rc4.metric("Konsentrasi di Ticker Ini", f"{ticker_concentration:.1f}%")
+
+        if ticker_concentration > 25:
+            st.warning(
+                f"⚠️ Setelah average down, **{dca_ticker}** akan menyumbang "
+                f"**{ticker_concentration:.1f}%** dari total portofolio — di atas batas "
+                f"konsentrasi umum 25% per saham. Pertimbangkan ulang ukurannya."
+            )
+
+        if st.button("✅ Terapkan Average Down ke Portfolio", key="dca_apply_btn"):
+            sqlite_repository.remove_portfolio_by_ticker(dca_ticker)
+            sqlite_repository.add_portfolio(dca_ticker, round(new_avg, 2), new_lots)
+            st.session_state.portfolio = sqlite_repository.get_portfolio()
+            st.toast(f"Average down {dca_ticker} diterapkan! Avg baru: Rp {new_avg:,.0f}")
+            st.rerun()
+    else:
+        st.info("Portfolio masih kosong — tambah posisi dulu di atas untuk pakai kalkulator ini.")
+
 # ============================================================================
 # TAB RENDERING PORTING
 # ============================================================================

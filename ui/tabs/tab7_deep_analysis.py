@@ -6,8 +6,40 @@ from data.fetchers import safe_float, fetch_stockbit_detail
 from data.scoring import compute_intraday_score
 from data.orderbook_wall import detect_walls, track_delta, grounded_three_tier, OrderbookLevel
 from repositories.sqlite_repository import sqlite_repository
+from data.pre_ara import get_ara_price, ara_distance
 
 WIB = __import__("pytz").timezone("Asia/Jakarta")
+
+
+def _tier_sanity_warning(strategies, current_price, open_price, prev_close, max_pct_from_price=0.08):
+    """
+    Deteksi entry Moderate/Low Risk yang secara struktural tidak wajar —
+    biasanya terjadi saat ARA membuat orderbook menipis/gap besar di bawah harga.
+    max_pct_from_price: ambang toleransi jarak dari harga sekarang (default 8%, bisa di-tune).
+    """
+    floor_price = min(open_price, current_price * (1 - max_pct_from_price)) if open_price > 0 else current_price * (1 - max_pct_from_price)
+    
+    ara_price = get_ara_price(prev_close) if prev_close else 0.0
+    is_near_ara = False
+    if ara_price > 0:
+        is_near_ara = ara_distance(current_price, ara_price) <= 1.0
+        
+    warnings = {}
+    for tier in ["Moderat", "Low Risk"]:
+        entry = strategies[tier]["entry"]
+        if entry < floor_price:
+            gap_pct = (current_price - entry) / current_price * 100
+            msg = (
+                f"Entry Rp {entry:,.0f} berjarak {gap_pct:.1f}% dari harga sekarang dan di bawah "
+                f"open hari ini (Rp {open_price:,.0f})."
+            )
+            if is_near_ara:
+                msg += " Saham sedang dekat/at ARA — gap orderbook di bawah adalah hal normal, bukan anomali sistem. Validasi manual dulu, jangan anggap ini level support genuine."
+            else:
+                msg += " Kemungkinan orderbook menipis/gap — validasi manual dulu, jangan anggap ini level support genuine."
+            warnings[tier] = msg
+    return warnings
+
 
 
 def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
@@ -130,6 +162,9 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     # Grounded 3-Tier Strategies
                     strategies = grounded_three_tier(snap.last_price, bid_walls, ask_walls)
                     score_data = compute_intraday_score(raw_data_obj, hist_row)
+                    
+                    open_price_today = snap.open_price if snap.open_price else snap.last_price
+                    tier_warnings = _tier_sanity_warning(strategies, snap.last_price, open_price_today, snap.prev_close)
 
                     c1, c2, c3, c4 = st.columns(4)
                     with c1:
@@ -172,17 +207,55 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     base_portfolio = total_portfolio_value if total_portfolio_value > 0 else 100_000_000.0
                     is_default_port = total_portfolio_value <= 0
                     
+                    risk_budget = 0.01 # 1% of portfolio risk
+                    risk_amount = base_portfolio * risk_budget
+                    
+                    # Aggressive
                     agg_entry = strategies['Aggressive']['entry']
-                    agg_lots = int((base_portfolio * 0.10) / (agg_entry * 100)) if agg_entry > 0 else 0
+                    agg_sl = strategies['Aggressive']['sl']
+                    agg_risk_per_share = agg_entry - agg_sl if agg_entry > agg_sl else 0
+                    agg_lots_by_risk = int(risk_amount / (agg_risk_per_share * 100)) if agg_risk_per_share > 0 else 0
+                    agg_lots_by_cap = int((base_portfolio * 0.10) / (agg_entry * 100)) if agg_entry > 0 else 0
+                    agg_lots = min(agg_lots_by_risk, agg_lots_by_cap) if agg_risk_per_share > 0 else agg_lots_by_cap
                     agg_val = agg_lots * agg_entry * 100
+                    agg_risk_val = agg_lots * agg_risk_per_share * 100
                     
+                    # Moderate
                     mod_entry = strategies['Moderat']['entry']
-                    mod_lots = int((base_portfolio * 0.15) / (mod_entry * 100)) if mod_entry > 0 else 0
+                    mod_sl = strategies['Moderat']['sl']
+                    mod_risk_per_share = mod_entry - mod_sl if mod_entry > mod_sl else 0
+                    mod_lots_by_risk = int(risk_amount / (mod_risk_per_share * 100)) if mod_risk_per_share > 0 else 0
+                    mod_lots_by_cap = int((base_portfolio * 0.15) / (mod_entry * 100)) if mod_entry > 0 else 0
+                    mod_lots = min(mod_lots_by_risk, mod_lots_by_cap) if mod_risk_per_share > 0 else mod_lots_by_cap
                     mod_val = mod_lots * mod_entry * 100
+                    mod_risk_val = mod_lots * mod_risk_per_share * 100
                     
+                    # Low Risk
                     low_entry = strategies['Low Risk']['entry']
-                    low_lots = int((base_portfolio * 0.20) / (low_entry * 100)) if low_entry > 0 else 0
+                    low_sl = strategies['Low Risk']['sl']
+                    low_risk_per_share = low_entry - low_sl if low_entry > low_sl else 0
+                    low_lots_by_risk = int(risk_amount / (low_risk_per_share * 100)) if low_risk_per_share > 0 else 0
+                    low_lots_by_cap = int((base_portfolio * 0.20) / (low_entry * 100)) if low_entry > 0 else 0
+                    low_lots = min(low_lots_by_risk, low_lots_by_cap) if low_risk_per_share > 0 else low_lots_by_cap
                     low_val = low_lots * low_entry * 100
+                    low_risk_val = low_lots * low_risk_per_share * 100
+
+                    # Cross-link from portfolio
+                    held_asset = next((a for a in st.session_state.get("portfolio", []) if a["Ticker"] == selected_detail), None)
+                    if held_asset:
+                        cur_avg = held_asset["Buy Price"]
+                        cur_lots = held_asset["Lots"]
+                        pl_pct = (snap.last_price - cur_avg) / cur_avg * 100 if cur_avg > 0 else 0.0
+                        pl_color = "#10B981" if pl_pct >= 0 else "#EF4444"
+                        st.markdown(f"""
+                        <div class="notes-section" style="border-left-color:{pl_color};">
+                        📌 <b>Posisi aktif:</b> {cur_lots:,} lot @ Rp {cur_avg:,.0f} avg
+                        — P/L saat ini: <span style="color:{pl_color};font-weight:700;">{pl_pct:+.2f}%</span>.
+                        Mau average down? Buka tab <b>💼 Live Portfolio Tracker</b> → Average Down Calculator,
+                        pakai entry Low Risk (Rp {strategies['Low Risk']['entry']:,.0f}) sebagai referensi harga
+                        kalau memang masih dalam batas wajar (lihat warning gap di atas kalau ada).
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     # 3-Tier Strategies
                     st.markdown("### 🎯 Grounded 3-Tier Execution Strategies (Orderbook Based)")
@@ -190,6 +263,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
                     else:
                         st.caption(f"📊 *Sizing calculates dynamically from your actual active portfolio size: Rp {total_portfolio_value:,.0f}*")
+                    st.caption("🛡️ *Sizing uses risk-first allocation: risking 1.0% of portfolio value per trade (max loss), capped at the maximum capital allocation tier.*")
                     st.caption("⚠️ *Penting: Pilih salah satu skenario entry di bawah yang paling sesuai dengan aksi pasar nyata — jangan mengambil kombinasi ketiganya sekaligus (total 45% portofolio).*")
                         
                     sc1, sc2, sc3 = st.columns(3)
@@ -202,7 +276,8 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
-                                <li><b>Suggested Size (10%):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
+                                <li><b>Suggested Size (10% cap):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
+                                <li><b>Max Loss at SL:</b> Rp {agg_risk_val:,.0f} ({agg_risk_val/base_portfolio*100:.2f}%)</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -215,10 +290,13 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 <li><b>Target (TP):</b> IDR {strategies['Moderat']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Moderat']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Moderat']['rr']}x</li>
-                                <li><b>Suggested Size (15%):</b> <b style="color:#FFFF00;">{mod_lots:,} Lots</b> (Rp {mod_val:,.0f})</li>
+                                <li><b>Suggested Size (15% cap):</b> <b style="color:#FFFF00;">{mod_lots:,} Lots</b> (Rp {mod_val:,.0f})</li>
+                                <li><b>Max Loss at SL:</b> Rp {mod_risk_val:,.0f} ({mod_risk_val/base_portfolio*100:.2f}%)</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
+                        if "Moderat" in tier_warnings:
+                            st.caption(f"🚨 {tier_warnings['Moderat']}")
                     with sc3:
                         st.markdown(f"""
                         <div class="strategy-card">
@@ -228,10 +306,13 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 <li><b>Target (TP):</b> IDR {strategies['Low Risk']['tp']:,.0f}</li>
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Low Risk']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
-                                <li><b>Suggested Size (20%):</b> <b style="color:#00D4AA;">{low_lots:,} Lots</b> (Rp {low_val:,.0f})</li>
+                                <li><b>Suggested Size (20% cap):</b> <b style="color:#00D4AA;">{low_lots:,} Lots</b> (Rp {low_val:,.0f})</li>
+                                <li><b>Max Loss at SL:</b> Rp {low_risk_val:,.0f} ({low_risk_val/base_portfolio*100:.2f}%)</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
+                        if "Low Risk" in tier_warnings:
+                            st.caption(f"🚨 {tier_warnings['Low Risk']}")
 
                     # Display Walls and Deltas
                     st.markdown("### 🧱 Orderbook Wall & Delta Signals")
