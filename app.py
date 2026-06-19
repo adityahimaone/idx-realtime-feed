@@ -535,7 +535,7 @@ def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = N
         "report": f"{winner['name']} ({age_str})"
     }
 
-async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, delay_sec: float):
+async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, delay_sec: float, hist_lookup: dict = None):
     """Fetch data for multiple tickers concurrently using our freshness logic."""
     results = {}
     progress_bar = st.progress(0)
@@ -568,6 +568,9 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
     total = len(tickers)
     sem = asyncio.Semaphore(5)  # Limit concurrency to 5 tickers at a time
     
+    # Ensure hist_lookup is pre-built
+    _lookup = hist_lookup or ticker_df.set_index("Clean Ticker").to_dict(orient="index")
+    
     async def fetch_single_ticker(ticker, hist_row):
         async with sem:
             # yfinance fetching is blocking so we run it in a thread pool
@@ -577,11 +580,7 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
     # Create tasks for all tickers
     tasks = []
     for ticker in tickers:
-        hist_rows_matched = ticker_df[ticker_df["Clean Ticker"] == ticker]
-        if not hist_rows_matched.empty:
-            hist_row = hist_rows_matched.iloc[0].to_dict()
-        else:
-            hist_row = {}
+        hist_row = _lookup.get(ticker, {})
         tasks.append(fetch_single_ticker(ticker, hist_row))
         
     completed = 0
@@ -805,14 +804,17 @@ ihsg = fetch_ihsg_data()
 render_ihsg_widget(ihsg)
 
 # ============================================================================
-# ============================================================================
 # DATA PIPELINE HEALTH MONITOR
 # ============================================================================
-st.markdown("##### 🛠️ Data Pipeline fallback health status")
+# Load database
+ticker_df = load_ticker_pool()
+if ticker_df.empty:
+    st.warning("Ticker database is empty or spreadsheet is unreachable.")
+    st.stop()
 
 # Determine real-time status dynamically based on connection flags
 # 1. Google Sheets
-gsheet_active = "load_ticker_pool" in globals() and bool(config.MARKET_ALPHA_SPREADSHEET_ID)
+gsheet_active = not ticker_df.empty
 gs_bg = "rgba(16, 185, 129, 0.08)" if gsheet_active else "rgba(239, 68, 68, 0.08)"
 gs_border = "rgba(16, 185, 129, 0.2)" if gsheet_active else "rgba(239, 68, 68, 0.2)"
 gs_dot = "#10B981" if gsheet_active else "#EF4444"
@@ -870,12 +872,6 @@ with hc4:
     """, unsafe_allow_html=True)
 st.write("")
 
-# Load database
-ticker_df = load_ticker_pool()
-if ticker_df.empty:
-    st.warning("Ticker database is empty or spreadsheet is unreachable.")
-    st.stop()
-
 # Single source of truth for hist_lookup (O(N) vectorized map)
 hist_lookup = ticker_df.set_index("Clean Ticker").to_dict(orient="index")
 
@@ -910,7 +906,7 @@ for _, row in ticker_df.iterrows():
             "prev_close": safe_float(row.get("ClosePrev")),
             "source": "gsheet",
             "source_ts": source_ts,
-            "report": "Initial load from Google Sheets"
+            "report": f"gsheet ({raw_ts})" if raw_ts else "gsheet"
         }
 
 # ============================================================================
@@ -918,34 +914,9 @@ for _, row in ticker_df.iterrows():
 # ============================================================================
 from ui.components.sidebar import render_sidebar
 sidebar_data = render_sidebar(ticker_df, fetch_screener_batch)
+cand_list = sidebar_data["cand_list"]
+display_list = sidebar_data["display_list"]
 fetch_delay = sidebar_data["fetch_delay"]
-max_scan = sidebar_data["max_scan"]
-selected_sectors = sidebar_data["selected_sectors"]
-selected_ranks = sidebar_data["selected_ranks"]
-min_score = sidebar_data["min_score"]
-exclude_filters_trending = sidebar_data["exclude_filters_trending"]
-exclude_filters_bsjp = sidebar_data["exclude_filters_bsjp"]
-exclude_filters_minervini = sidebar_data["exclude_filters_minervini"]
-search_ticker = sidebar_data["search_ticker"]
-
-# ============================================================================
-# FILTER TICKERS
-# ============================================================================
-filtered_df = ticker_df.copy()
-
-if search_ticker:
-    # pencarian eksplisit selalu menang, bypass semua filter lain
-    filtered_df = filtered_df[filtered_df["Clean Ticker"] == search_ticker]
-else:
-    if selected_sectors:
-        filtered_df = filtered_df[filtered_df["Sector"].isin(selected_sectors)]
-    if selected_ranks:
-        filtered_df = filtered_df[filtered_df["Rank"].isin(selected_ranks)]
-    if min_score > 0:
-        filtered_df = filtered_df[filtered_df["Score v2"].apply(safe_float) >= min_score]
-
-display_list = filtered_df["Clean Ticker"].tolist()
-cand_list = display_list[:max_scan]
 
 st.subheader(f"📊 Displaying {len(display_list)} Tickers matching filters")
 if display_list:
@@ -962,7 +933,7 @@ else:
 col_ref1, col_ref2, col_info = st.columns([1, 1, 2])
 with col_ref1:
     if st.button("🔄 Refresh Live Feed (Multi)", use_container_width=True, help="Fetch via Google Sheets ➔ yfinance ➔ IDX Endpoint"):
-        live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay))
+        live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay, hist_lookup))
         st.session_state.screener_data.update(live_results)
         st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Multi-Source)"
         st.rerun()
@@ -1022,7 +993,7 @@ with col_info:
     if st.session_state.get("trigger_auto_scan", False):
         st.session_state["trigger_auto_scan"] = False
         with st.spinner("⏳ Auto Refresh Triggered: Scanning multi-source feed..."):
-            live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay))
+            live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay, hist_lookup))
             st.session_state.screener_data.update(live_results)
             st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Auto Multi-Source)"
         st.rerun()
@@ -1370,21 +1341,18 @@ with tab_port:
                 st.session_state.portfolio = []
                 st.toast("Portfolio cleared.")
                 st.rerun()
-    else:
-        st.info("Portfolio is empty. Add assets using the fields above.")
 
-    # ========================================================================
-    # AVERAGE DOWN / DCA CALCULATOR
-    # ========================================================================
-    st.markdown("---")
-    st.markdown("### 🔄 Average Down Calculator")
-    st.caption(
-        "Simulasikan dampak average down terhadap harga rata-rata, jarak breakeven, "
-        "dan konsentrasi risiko sebelum eksekusi. Average down memperbesar eksposur "
-        "di satu saham — gunakan dengan disiplin, bukan reaksi otomatis saat posisi rugi."
-    )
+        # ========================================================================
+        # AVERAGE DOWN / DCA CALCULATOR (Moved inside 'if st.session_state.portfolio' block)
+        # ========================================================================
+        st.markdown("---")
+        st.markdown("### 🔄 Average Down Calculator")
+        st.caption(
+            "Simulasikan dampak average down terhadap harga rata-rata, jarak breakeven, "
+            "dan konsentrasi risiko sebelum eksekusi. Average down memperbesar eksposur "
+            "di satu saham — gunakan dengan disiplin, bukan reaksi otomatis saat posisi rugi."
+        )
 
-    if st.session_state.portfolio:
         dca_ticker = st.selectbox(
             "Pilih posisi yang ingin di-average down",
             options=[a["Ticker"] for a in st.session_state.portfolio],
@@ -1411,7 +1379,12 @@ with tab_port:
         new_invested = (old_avg * old_lots * 100) + (dca_price * dca_lots * 100)
         new_avg = new_invested / (new_lots * 100)
         breakeven_gap_pct = ((new_avg - live_price) / live_price * 100) if live_price > 0 else 0.0
-        ticker_concentration = (new_invested / total_portfolio_value * 100) if total_portfolio_value > 0 else 0.0
+
+        # Market-value-based concentration:
+        old_position_mkt_val = (old_lots * live_price * 100)
+        new_position_mkt_val = (new_lots * dca_price * 100)
+        total_after_dca = total_portfolio_value - old_position_mkt_val + new_position_mkt_val
+        ticker_concentration = (new_position_mkt_val / total_after_dca * 100) if total_after_dca > 0 else 0.0
 
         st.markdown("##### 📊 Hasil Simulasi")
         rc1, rc2, rc3, rc4 = st.columns(4)
@@ -1430,14 +1403,18 @@ with tab_port:
                 f"konsentrasi umum 25% per saham. Pertimbangkan ulang ukurannya."
             )
 
-        if st.button("✅ Terapkan Average Down ke Portfolio", key="dca_apply_btn"):
+        confirm_dca = st.checkbox(
+            f"Saya yakin ingin average down {dca_ticker} ke avg baru Rp {new_avg:,.0f} ({new_lots} lot)",
+            key="dca_confirm"
+        )
+        if st.button("✅ Terapkan Average Down ke Portfolio", disabled=not confirm_dca, key="dca_apply_btn"):
             sqlite_repository.remove_portfolio_by_ticker(dca_ticker)
             sqlite_repository.add_portfolio(dca_ticker, round(new_avg, 2), new_lots)
             st.session_state.portfolio = sqlite_repository.get_portfolio()
             st.toast(f"Average down {dca_ticker} diterapkan! Avg baru: Rp {new_avg:,.0f}")
             st.rerun()
     else:
-        st.info("Portfolio masih kosong — tambah posisi dulu di atas untuk pakai kalkulator ini.")
+        st.info("Portfolio is empty. Add assets using the fields above.")
 
 # ============================================================================
 # TAB RENDERING PORTING

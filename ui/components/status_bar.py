@@ -81,8 +81,28 @@ def render_status_board():
 
 def render_ihsg_widget(ihsg: dict | None):
     if not ihsg:
-        st.caption("⚠️ IHSG data tidak tersedia saat ini (Yahoo Finance timeout).")
+        st.caption("⚠️ IHSG data tidak tersedia saat ini.")
         return
+
+    # Guard untuk fallback mode (Google Finance — no sparkline)
+    if not ihsg.get("sparkline") or not ihsg.get("prices"):
+        is_up = ihsg.get("change_abs", 0.0) >= 0
+        chg_color = "#10B981" if is_up else "#EF4444"
+        chg_arrow = "▲" if is_up else "▼"
+        st.markdown(f"""
+<div style="background:#161B27;border:1px solid #2D3748;border-radius:14px;padding:16px 20px;margin-bottom:4px;">
+  <div style="font-size:0.75em;color:#64748B;">IHSG / IDX Composite</div>
+  <div style="font-size:2.1em;font-weight:800;color:#F1F5F9;">{ihsg['current']:,.2f}</div>
+  <div style="color:{chg_color};font-weight:700;margin-top:4px;">
+    {chg_arrow} {abs(ihsg['change_abs']):,.2f} ({abs(ihsg['change_pct']):.2f}%)
+  </div>
+  <div style="margin-top:6px;font-size:0.72em;color:#475569;">
+    Sumber: {ihsg.get('source', 'Fallback')} (no sparkline) · refresh tiap 120 detik
+  </div>
+</div>
+""", unsafe_allow_html=True)
+        return
+
     is_up = ihsg["change_abs"] >= 0
     chg_color = "#10B981" if is_up else "#EF4444"
     chg_arrow = "▲" if is_up else "▼"
@@ -157,7 +177,7 @@ def render_ihsg_widget(ihsg: dict | None):
     }});
   }}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-}})();
+}})( );
 </script>
 """
     st.components.v1.html(html, height=175, scrolling=False)

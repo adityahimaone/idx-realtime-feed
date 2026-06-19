@@ -202,8 +202,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             <span>TS: {datetime.now(WIB).strftime('%H:%M:%S')} WIB (Live)</span>
                         </div>
                         """, unsafe_allow_html=True)
-                    
-                    # Calculate position sizes
+                         # Calculate position sizes
                     base_portfolio = total_portfolio_value if total_portfolio_value > 0 else 100_000_000.0
                     is_default_port = total_portfolio_value <= 0
                     
@@ -219,6 +218,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     agg_lots = min(agg_lots_by_risk, agg_lots_by_cap) if agg_risk_per_share > 0 else agg_lots_by_cap
                     agg_val = agg_lots * agg_entry * 100
                     agg_risk_val = agg_lots * agg_risk_per_share * 100
+                    if agg_risk_per_share <= 0:
+                        risk_display_agg = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
+                    else:
+                        risk_display_agg = f"Rp {agg_risk_val:,.0f} ({agg_risk_val/base_portfolio*100:.2f}%)"
                     
                     # Moderate
                     mod_entry = strategies['Moderat']['entry']
@@ -229,6 +232,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     mod_lots = min(mod_lots_by_risk, mod_lots_by_cap) if mod_risk_per_share > 0 else mod_lots_by_cap
                     mod_val = mod_lots * mod_entry * 100
                     mod_risk_val = mod_lots * mod_risk_per_share * 100
+                    if mod_risk_per_share <= 0:
+                        risk_display_mod = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
+                    else:
+                        risk_display_mod = f"Rp {mod_risk_val:,.0f} ({mod_risk_val/base_portfolio*100:.2f}%)"
                     
                     # Low Risk
                     low_entry = strategies['Low Risk']['entry']
@@ -239,6 +246,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     low_lots = min(low_lots_by_risk, low_lots_by_cap) if low_risk_per_share > 0 else low_lots_by_cap
                     low_val = low_lots * low_entry * 100
                     low_risk_val = low_lots * low_risk_per_share * 100
+                    if low_risk_per_share <= 0:
+                        risk_display_low = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
+                    else:
+                        risk_display_low = f"Rp {low_risk_val:,.0f} ({low_risk_val/base_portfolio*100:.2f}%)"
 
                     # Cross-link from portfolio
                     held_asset = next((a for a in st.session_state.get("portfolio", []) if a["Ticker"] == selected_detail), None)
@@ -256,7 +267,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         kalau memang masih dalam batas wajar (lihat warning gap di atas kalau ada).
                         </div>
                         """, unsafe_allow_html=True)
-
+ 
                     # 3-Tier Strategies
                     st.markdown("### 🎯 Grounded 3-Tier Execution Strategies (Orderbook Based)")
                     if is_default_port:
@@ -270,15 +281,15 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     with sc1:
                         st.markdown(f"""
                         <div class="strategy-card">
-                            <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
-                                <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
-                                <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
-                                <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
-                                <li><b>Suggested Size (10% cap):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
-                                <li><b>Max Loss at SL:</b> Rp {agg_risk_val:,.0f} ({agg_risk_val/base_portfolio*100:.2f}%)</li>
-                            </ul>
+                        <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
+                        <ul>
+                            <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
+                            <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
+                            <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
+                            <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
+                            <li><b>Suggested Size (10% cap):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
+                            <li><b>Max Loss at SL:</b> {risk_display_agg}</li>
+                        </ul>
                         </div>
                         """, unsafe_allow_html=True)
                     with sc2:
@@ -291,7 +302,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Moderat']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Moderat']['rr']}x</li>
                                 <li><b>Suggested Size (15% cap):</b> <b style="color:#FFFF00;">{mod_lots:,} Lots</b> (Rp {mod_val:,.0f})</li>
-                                <li><b>Max Loss at SL:</b> Rp {mod_risk_val:,.0f} ({mod_risk_val/base_portfolio*100:.2f}%)</li>
+                                <li><b>Max Loss at SL:</b> {risk_display_mod}</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)
@@ -307,7 +318,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 <li><b>Stop Loss (SL):</b> IDR {strategies['Low Risk']['sl']:,.0f}</li>
                                 <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
                                 <li><b>Suggested Size (20% cap):</b> <b style="color:#00D4AA;">{low_lots:,} Lots</b> (Rp {low_val:,.0f})</li>
-                                <li><b>Max Loss at SL:</b> Rp {low_risk_val:,.0f} ({low_risk_val/base_portfolio*100:.2f}%)</li>
+                                <li><b>Max Loss at SL:</b> {risk_display_low}</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True)

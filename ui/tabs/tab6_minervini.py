@@ -26,6 +26,17 @@ def fetch_long_smas(ticker: str) -> dict:
         return {}
 
 
+@st.cache_data(ttl=86400)
+def fetch_ihsg_3mo_return() -> float:
+    try:
+        df = yf.Ticker("^JKSE").history(period="3mo", interval="1d")
+        if df.empty or len(df) < 5:
+            return 0.0
+        return (df["Close"].iloc[-1] / df["Close"].iloc[0] - 1) * 100
+    except Exception:
+        return 0.0
+
+
 def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg_info=None):
     """Render Tab 6: Mark Minervini Trend Template with 52W Low and Relative Strength (RS) to IHSG"""
     st.markdown("### 📈 Mark Minervini Trend Template")
@@ -33,12 +44,8 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg
     
     minervini_source_list = scored_list_global if exclude_filters_minervini else scored_list
     if minervini_source_list:
-        # Simple IHSG performance mapping
-        ihsg_now = 7200.0
-        ihsg_3mo_ago = 7000.0
-        if ihsg_info and "current" in ihsg_info:
-            ihsg_now = ihsg_info["current"]
-            ihsg_3mo_ago = ihsg_info.get("prev_close", ihsg_now * 0.98) # fallback estimation
+        # RS computation: Ticker performance vs IHSG performance over last 3 months
+        rs_ihsg = fetch_ihsg_3mo_return()
 
         minervini_data = []
         for s in minervini_source_list:
@@ -73,7 +80,6 @@ def render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg
             # RS computation: Ticker performance vs IHSG performance
             price_3mo_ago = cached_vals.get("price_3mo_ago") or (safe_float(hist_row.get("ClosePrev", last)) * 0.90)
             rs_ticker = (last / price_3mo_ago - 1) * 100 if price_3mo_ago > 0 else 0.0
-            rs_ihsg   = (ihsg_now / ihsg_3mo_ago - 1) * 100
             rs_positive = rs_ticker > rs_ihsg
                 
             conds = {
