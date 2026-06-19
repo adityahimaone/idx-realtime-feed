@@ -332,13 +332,14 @@ def safe_float(v, default=0.0):
 
 @st.cache_data(ttl=300)
 def load_ticker_pool():
-    """Load and cache ticker list from the All Tickers worksheet on MAS Staging."""
+    """Load and cache ticker list from Google Sheets, with local CSV fallback to prevent API rate limits."""
+    backup_path = "data/ticker_pool_backup.csv"
     try:
         sh = sheets_repository._get_client().open_by_key(config.MARKET_ALPHA_SPREADSHEET_ID)
         ws = sh.worksheet("All Tickers")
         vals = ws.get_all_values()
         if not vals:
-            return pd.DataFrame()
+            raise ValueError("All Tickers worksheet is empty")
             
         headers = [h.strip() for h in vals[0]]
         col_idx = {h: i for i, h in enumerate(headers)}
@@ -361,8 +362,32 @@ def load_ticker_pool():
             
         df = pd.DataFrame(records)
         df["Clean Ticker"] = df["Ticker"].str.upper().str.replace("IDX:", "", regex=False).str.strip()
+        
+        # Save local backup on successful fetch
+        try:
+            os.makedirs("data", exist_ok=True)
+            df.to_csv(backup_path, index=False)
+            logger.info("Successfully updated local ticker pool registry cache backup.")
+        except Exception as cache_err:
+            logger.warning(f"Failed to save local ticker pool registry cache: {cache_err}")
+            
         return df
     except Exception as e:
+        logger.warning(f"Failed to load tickers from Google Sheets (falling back to local cache): {e}")
+        # Local Fallback
+        if os.path.exists(backup_path):
+            try:
+                df = pd.read_csv(backup_path)
+                # Ensure correct formatting types
+                df = df.fillna("")
+                for col in df.columns:
+                    df[col] = df[col].astype(str)
+                df["Clean Ticker"] = df["Ticker"].str.upper().str.replace("IDX:", "", regex=False).str.strip()
+                st.warning("⚠️ Google Sheets API Quota exceeded or error. Menggunakan registry offline dari local cache backup.")
+                return df
+            except Exception as fallback_err:
+                st.error(f"Fallback to local cache failed: {fallback_err}")
+        
         st.error(f"Failed to load tickers from Google Sheets: {e}")
         return pd.DataFrame()
 
