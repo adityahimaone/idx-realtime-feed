@@ -910,13 +910,33 @@ for _, row in ticker_df.iterrows():
         }
 
 # ============================================================================
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS & TICKERS FILTERING
 # ============================================================================
 from ui.components.sidebar import render_sidebar
 sidebar_data = render_sidebar(ticker_df, fetch_screener_batch)
-cand_list = sidebar_data["cand_list"]
-display_list = sidebar_data["display_list"]
 fetch_delay = sidebar_data["fetch_delay"]
+max_scan = sidebar_data["max_scan"]
+selected_sectors = sidebar_data["selected_sectors"]
+selected_ranks = sidebar_data["selected_ranks"]
+min_score = sidebar_data["min_score"]
+exclude_filters_trending = sidebar_data["exclude_filters_trending"]
+exclude_filters_bsjp = sidebar_data["exclude_filters_bsjp"]
+exclude_filters_minervini = sidebar_data["exclude_filters_minervini"]
+search_ticker = sidebar_data["search_ticker"]
+
+filtered_df = ticker_df.copy()
+if search_ticker:
+    filtered_df = filtered_df[filtered_df["Clean Ticker"] == search_ticker]
+else:
+    if selected_sectors:
+        filtered_df = filtered_df[filtered_df["Sector"].isin(selected_sectors)]
+    if selected_ranks:
+        filtered_df = filtered_df[filtered_df["Rank"].isin(selected_ranks)]
+    if min_score > 0:
+        filtered_df = filtered_df[filtered_df["Score v2"].apply(safe_float) >= min_score]
+
+display_list = filtered_df["Clean Ticker"].tolist()
+cand_list = display_list[:max_scan]
 
 st.subheader(f"📊 Displaying {len(display_list)} Tickers matching filters")
 if display_list:
