@@ -6,7 +6,7 @@ from data.fetchers import safe_float, fetch_stockbit_detail
 from data.scoring import compute_intraday_score
 from data.orderbook_wall import (
     detect_walls, track_delta, OrderbookLevel, WallScore,
-    grounded_three_tier_A, grounded_three_tier_B,
+    grounded_three_tier_A, grounded_three_tier_B, grounded_three_tier_C,
     get_sentiment_label,
 )
 from repositories.sqlite_repository import sqlite_repository
@@ -21,6 +21,8 @@ def _tier_sanity_warning(strategies, current_price, open_price, prev_close, max_
     biasanya terjadi saat ARA membuat orderbook menipis/gap besar di bawah harga.
     max_pct_from_price: ambang toleransi jarak dari harga sekarang (default 8%, bisa di-tune).
     """
+    if not strategies:
+        return {}
     floor_price = min(open_price, current_price * (1 - max_pct_from_price)) if open_price > 0 else current_price * (1 - max_pct_from_price)
     
     ara_price = get_ara_price(prev_close) if prev_close else 0.0
@@ -30,7 +32,9 @@ def _tier_sanity_warning(strategies, current_price, open_price, prev_close, max_
         
     warnings = {}
     for tier in ["Moderat", "Low Risk"]:
-        entry = strategies[tier]["entry"]
+        entry = strategies[tier].get("entry")
+        if entry is None:
+            continue
         if entry < floor_price:
             gap_pct = (current_price - entry) / current_price * 100
             msg = (
@@ -169,24 +173,45 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     # Engine B needs extra context
                     total_ask_lot = sum(lvl.lot for lvl in snap.ask_levels)
                     open_price_today = snap.open_price if snap.open_price else snap.last_price
-                    # Derive avg_price from OHLC (no dedicated avg field available)
+                    # Derive avg_price (prefer snap.avg if available)
                     _high = snap.high if snap.high else snap.last_price
                     _low = snap.low if snap.low else snap.last_price
-                    avg_price_est = (open_price_today + _high + _low + snap.last_price) / 4
+                    avg_price_est = (
+                        getattr(snap, 'avg', None)
+                        or getattr(snap, 'average_price', None)
+                        or getattr(snap, 'avg_price', None)
+                        or ((open_price_today + _high + _low + snap.last_price) / 4)
+                    )
 
                     strategies_B = grounded_three_tier_B(
                         last_price=snap.last_price,
-                        bid_walls=curr_bids,
-                        ask_walls=curr_asks,
+                        bid_levels=curr_bids,
+                        ask_levels=curr_asks,
                         total_bid_lot=snap.total_bid_lot,
                         total_ask_lot=total_ask_lot,
                         avg_price=avg_price_est,
                         open_price=open_price_today,
                     )
 
+                    # Engine C computation (if available)
+                    fib_range_pct = ((snap.high - snap.low) / snap.last_price * 100) if (snap.high and snap.low) else 0
+                    engine_c_available = fib_range_pct >= 2.0
+
+                    strategies_C = None
+                    if engine_c_available:
+                        strategies_C = grounded_three_tier_C(
+                            last_price=snap.last_price,
+                            high_price=snap.high,
+                            low_price=snap.low,
+                            open_price=open_price_today,
+                            bid_levels=curr_bids,
+                            ask_levels=curr_asks,
+                        )
+
                     score_data = compute_intraday_score(raw_data_obj, hist_row)
                     tier_warnings_A = _tier_sanity_warning(strategies_A, snap.last_price, open_price_today, snap.prev_close)
                     tier_warnings_B = _tier_sanity_warning(strategies_B, snap.last_price, open_price_today, snap.prev_close)
+                    tier_warnings_C = _tier_sanity_warning(strategies_C, snap.last_price, open_price_today, snap.prev_close) if strategies_C else {}
 
                     c1, c2, c3, c4 = st.columns(4)
                     with c1:
@@ -238,12 +263,16 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         cur_lots = held_asset["Lots"]
                         pl_pct = (snap.last_price - cur_avg) / cur_avg * 100 if cur_avg > 0 else 0.0
                         pl_color = "#10B981" if pl_pct >= 0 else "#EF4444"
+                        _low_a = strategies_A['Low Risk'].get('entry') or float('inf')
+                        _low_b = strategies_B['Low Risk'].get('entry') or float('inf')
+                        _low_c = strategies_C['Low Risk'].get('entry') or float('inf') if strategies_C else float('inf')
+                        lr_ref_entry = min(_low_a, _low_b, _low_c)
                         st.markdown(f"""
                         <div class="notes-section" style="border-left-color:{pl_color};">
                         📌 <b>Posisi aktif:</b> {cur_lots:,} lot @ Rp {cur_avg:,.0f} avg
                         — P/L saat ini: <span style="color:{pl_color};font-weight:700;">{pl_pct:+.2f}%</span>.
                         Mau average down? Buka tab <b>💼 Live Portfolio Tracker</b> → Average Down Calculator,
-                        pakai entry Low Risk (Rp {strategies_A['Low Risk']['entry']:,.0f}) sebagai referensi harga
+                        pakai entry Low Risk (Rp {lr_ref_entry:,.0f}) sebagai referensi harga
                         kalau memang masih dalam batas wajar (lihat warning gap di atas kalau ada).
                         </div>
                         """, unsafe_allow_html=True)
@@ -267,23 +296,49 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
 
                     # ── Engine Selector ────────────────────────────────────────
                     imb = snap.imbalance_ratio if snap.imbalance_ratio else 1.0
-                    auto_idx = 1 if imb < 0.8 else 0
+                    engine_options = [
+                        "Engine A — Wall Gravity (Neutral/Bullish)",
+                        "Engine B — Contextual Alpha (Bearish/Volatile)"
+                    ]
+                    if engine_c_available:
+                        engine_options.append("Engine C — Fibonacci Confirmation (Range Day)")
+                    engine_options.append("Both A+B (Compare)")
+
+                    # Auto-suggest logic (smarter):
+                    avg_above_last = avg_price_est > snap.last_price
+                    trending_down  = snap.last_price < open_price_today
+                    is_bearish     = (imb < 0.8) or (avg_above_last and trending_down)
+                    is_range_day   = engine_c_available
+
+                    if is_range_day and not is_bearish:
+                        auto_idx = engine_options.index("Engine C — Fibonacci Confirmation (Range Day)")
+                    elif is_bearish:
+                        auto_idx = 1  # Engine B
+                    else:
+                        auto_idx = 0  # Engine A
+
                     engine_choice = st.radio(
                         "🔧 Engine Mode:",
-                        ["Engine A — Wall Gravity (Neutral/Bullish)",
-                         "Engine B — Contextual Alpha (Bearish/Volatile)",
-                         "Both (Compare)"],
+                        engine_options,
                         horizontal=True,
                         index=auto_idx,
                         key="engine_mode_radio",
                     )
                     use_A = "A" in engine_choice or "Both" in engine_choice
                     use_B = "B" in engine_choice or "Both" in engine_choice
+                    use_C = "C" in engine_choice
                     is_both = "Both" in engine_choice
 
-                    # Active strategies for sizing (use B if selected, else A)
-                    strategies = strategies_B if use_B else strategies_A
-                    tier_warnings = tier_warnings_B if use_B else tier_warnings_A
+                    # Active strategies for sizing
+                    if use_C:
+                        strategies = strategies_C
+                        tier_warnings = tier_warnings_C
+                    elif use_B:
+                        strategies = strategies_B
+                        tier_warnings = tier_warnings_B
+                    else:
+                        strategies = strategies_A
+                        tier_warnings = tier_warnings_A
 
                     # ── Sentiment Badge (Engine B) ────────────────────────────
                     if use_B:
@@ -312,6 +367,21 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         </div>
                         """, unsafe_allow_html=True)
 
+                    # ── Fibonacci Badge (Engine C) ────────────────────────────
+                    if use_C and strategies_C and "fib_levels" in strategies_C:
+                        ext_mode = strategies_C.get('extension_mode', False)
+                        rng = strategies_C.get('intraday_range', 0)
+                        mode_str = "🔻 Extension Mode (price below all retracements)" if ext_mode \
+                                   else "🔼 Retracement Mode (price inside range)"
+                        st.markdown(f"""
+                        <div style="background:#1a1a2e; border-left:4px solid #C9A447; padding:10px;
+                                    border-radius:6px; margin-bottom:12px;">
+                            🎯 <b>Engine C — Fibonacci:</b>
+                            Range hari ini <code>{rng:,.0f} poin</code> ({fib_range_pct:.1f}%)
+                            | {mode_str}
+                        </div>
+                        """, unsafe_allow_html=True)
+
                     if is_default_port:
                         st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
                     else:
@@ -320,8 +390,9 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     st.caption("⚠️ *Penting: Pilih salah satu skenario entry di bawah yang paling sesuai dengan aksi pasar nyata — jangan mengambil kombinasi ketiganya sekaligus (total 45% portofolio).*")
                         
                     # ── Render strategy cards (helper to avoid duplication) ─
-                    def _render_strategy_cards(strats, label_suffix=""):
+                    def _render_strategy_cards(strats, label_suffix="", tw=None):
                         """Render 3 strategy columns for a given engine output."""
+                        tier_warnings_local = tw or {}
                         sc1, sc2, sc3 = st.columns(3)
 
                         # --- Aggressive ---
@@ -371,7 +442,9 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             mod_rr_badge = '✅' if mod.get('valid', True) else '⚠️ R/R Rendah'
                             wall_info_mod = ""
                             if mod.get('wall_price'):
-                                wall_info_mod = f"<li><b>Anchored to Wall:</b> Rp {mod['wall_price']:,.0f} ({mod['wall_lot']:,} lot, score {mod.get('wall_score', 'N/A')}"
+                                _ws_mod = mod.get('wall_score')
+                                _ws_str_mod = f"{_ws_mod:.3f}" if isinstance(_ws_mod, float) else "N/A"
+                                wall_info_mod = f"<li><b>Anchored to Wall:</b> Rp {mod['wall_price']:,.0f} ({mod['wall_lot']:,} lot, score {_ws_str_mod}"
                                 if mod.get('wall_round_bonus') and mod['wall_round_bonus'] != 1.0:
                                     wall_info_mod += f", round ×{mod['wall_round_bonus']:.2f}"
                                 wall_info_mod += ")</li>"
@@ -400,8 +473,8 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             """, unsafe_allow_html=True)
                             if not mod.get('valid', True):
                                 st.warning(f"⚠️ **Moderat**: {mod['warning']}")
-                            if "Moderat" in tier_warnings:
-                                st.caption(f"🚨 {tier_warnings['Moderat']}")
+                            if "Moderat" in tier_warnings_local:
+                                st.caption(f"🚨 {tier_warnings_local['Moderat']}")
 
                         # --- Low Risk ---
                         with sc3:
@@ -410,7 +483,9 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             low_rr_badge = '✅' if low.get('valid', True) else '⚠️ R/R Rendah'
                             wall_info_low = ""
                             if low.get('wall_price'):
-                                wall_info_low = f"<li><b>Anchored to Wall:</b> Rp {low['wall_price']:,.0f} ({low['wall_lot']:,} lot, score {low.get('wall_score', 'N/A')}"
+                                _ws_low = low.get('wall_score')
+                                _ws_str_low = f"{_ws_low:.3f}" if isinstance(_ws_low, float) else "N/A"
+                                wall_info_low = f"<li><b>Anchored to Wall:</b> Rp {low['wall_price']:,.0f} ({low['wall_lot']:,} lot, score {_ws_str_low}"
                                 if low.get('wall_round_bonus') and low['wall_round_bonus'] != 1.0:
                                     wall_info_low += f", round ×{low['wall_round_bonus']:.2f}"
                                 wall_info_low += ")</li>"
@@ -439,23 +514,23 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             """, unsafe_allow_html=True)
                             if not low.get('valid', True):
                                 st.warning(f"⚠️ **Low Risk**: {low['warning']}")
-                            if "Low Risk" in tier_warnings:
-                                st.caption(f"🚨 {tier_warnings['Low Risk']}")
+                            if "Low Risk" in tier_warnings_local:
+                                st.caption(f"🚨 {tier_warnings_local['Low Risk']}")
 
                     # ── Render based on engine choice ─────────────────────────
                     if is_both:
                         st.markdown("#### 🅰️ Engine A — Wall Gravity")
                         st.caption("Pure structural analysis. No market context.")
-                        _render_strategy_cards(strategies_A, " [A]")
+                        _render_strategy_cards(strategies_A, " [A]", tw=tier_warnings_A)
 
                         st.markdown("---")
                         st.markdown("#### 🅱️ Engine B — Contextual Alpha")
                         st.caption(f"Sentiment-adjusted. Factor: {strategies_B.get('sentiment_factor', '?')}x ({strategies_B.get('sentiment_label', '?')})")
-                        _render_strategy_cards(strategies_B, " [B]")
+                        _render_strategy_cards(strategies_B, " [B]", tw=tier_warnings_B)
                     else:
                         engine_lbl = strategies.get('engine_label', 'Wall Gravity')
                         st.caption(f"🔧 Active Engine: **{engine_lbl}**")
-                        _render_strategy_cards(strategies)
+                        _render_strategy_cards(strategies, tw=tier_warnings)
 
                     # Display Walls and Deltas
                     st.markdown("### 🧱 Orderbook Wall & Delta Signals")

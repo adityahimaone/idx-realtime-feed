@@ -125,20 +125,20 @@ def _calc_rr(entry: float, sl: float, tp: float) -> float:
 
 def _tier_result(tier: str, entry, sl, tp, rr, wall: Optional[WallScore], min_rr: float):
     """Build standardized tier result dict."""
-    valid = rr >= min_rr
+    valid   = rr >= min_rr
     warning = None if valid else \
-        f"R/R {rr:.2f}x di bawah minimum {min_rr:.1f}x — pertimbangkan skip tier ini."
+              f"R/R {rr:.2f}x di bawah minimum {min_rr:.1f}x — pertimbangkan skip tier ini."
     return {
-        "entry":      entry,
-        "sl":         sl,
-        "tp":         tp,
-        "rr":         rr,
-        "wall_price": wall.price if wall else None,
-        "wall_lot":   wall.lot   if wall else None,
-        "wall_score": round(wall.score, 3) if wall else None,
-        "wall_round_bonus": round(wall.round_bonus, 2) if wall else None,
-        "valid":      valid,
-        "warning":    warning,
+        "entry":            entry,
+        "sl":               sl,
+        "tp":               tp,
+        "rr":               rr,
+        "wall_price":       wall.price           if wall else None,
+        "wall_lot":         wall.lot             if wall else None,
+        "wall_score":       round(wall.score, 3) if wall else None,
+        "wall_round_bonus": wall.round_bonus     if wall else None,
+        "valid":            valid,
+        "warning":          warning,
     }
 
 
@@ -190,8 +190,8 @@ def score_walls_A(walls: List[OrderbookLevel], last_price: float) -> List[WallSc
 
 def grounded_three_tier_A(
     last_price: float,
-    bid_walls:  List[OrderbookLevel],
-    ask_walls:  List[OrderbookLevel],
+    bid_levels: List[OrderbookLevel],
+    ask_levels: List[OrderbookLevel],
 ) -> dict:
     """
     Engine A — Wall Gravity.
@@ -206,11 +206,11 @@ def grounded_three_tier_A(
     tick = get_tick_size(last_price)
 
     supports = sorted(
-        [w for w in bid_walls if w.price < last_price],
+        [w for w in bid_levels if w.price < last_price],
         key=lambda w: w.price, reverse=True
     )
     resistances = sorted(
-        [w for w in ask_walls if w.price > last_price],
+        [w for w in ask_levels if w.price > last_price],
         key=lambda w: w.price
     )
     nearest_resist = _guard_nearest_resistance(resistances, last_price, tick)
@@ -273,7 +273,7 @@ def grounded_three_tier_A(
 
     return {
         "engine": "A",
-        "engine_label": "Wall Gravity",
+        "engine_label": "Wall Gravity (Engine A)",
         "Aggressive": _tier_result("Aggressive", agg_entry, agg_sl, agg_tp,
                                    agg_rr, None, MIN_RR["Aggressive"]),
         "Moderat":    _tier_result("Moderat", mod_entry, mod_sl, mod_tp,
@@ -408,8 +408,8 @@ def score_walls_B(
 
 def grounded_three_tier_B(
     last_price:    float,
-    bid_walls:     List[OrderbookLevel],
-    ask_walls:     List[OrderbookLevel],
+    bid_levels:    List[OrderbookLevel],
+    ask_levels:    List[OrderbookLevel],
     total_bid_lot: int,
     total_ask_lot: int,
     avg_price:     float,
@@ -428,11 +428,11 @@ def grounded_three_tier_B(
     thresholds = get_entry_thresholds(sentiment)
 
     supports = sorted(
-        [w for w in bid_walls if w.price < last_price],
+        [w for w in bid_levels if w.price < last_price],
         key=lambda w: w.price, reverse=True
     )
     resistances = sorted(
-        [w for w in ask_walls if w.price > last_price],
+        [w for w in ask_levels if w.price > last_price],
         key=lambda w: w.price
     )
     nearest_resist = _guard_nearest_resistance(resistances, last_price, tick)
@@ -518,7 +518,7 @@ def grounded_three_tier_B(
 
     return {
         "engine": "B",
-        "engine_label": "Contextual Alpha",
+        "engine_label": "Contextual Alpha (Engine B)",
         "sentiment_factor": round(sentiment, 3),
         "sentiment_label": get_sentiment_label(sentiment),
         "aggressive_enabled": thresholds["aggressive_enabled"],
@@ -528,6 +528,161 @@ def grounded_three_tier_B(
                                    mod_rr, mod_wall, MIN_RR["Moderat"]),
         "Low Risk":   _tier_result("Low Risk", low_entry, low_sl, low_tp,
                                    low_rr, low_wall, MIN_RR["Low Risk"]),
+    }
+
+
+def fib_levels_from_ohlc(high: float, low: float) -> dict:
+    """Compute Fib retracement and extension levels from intraday range."""
+    r = high - low
+    return {
+        # Retracement (above low, below high)
+        "R0.236": high - r * 0.236,
+        "R0.382": high - r * 0.382,
+        "R0.500": high - r * 0.500,
+        "R0.618": high - r * 0.618,
+        "R0.786": high - r * 0.786,
+        # Extension below low (bearish continuation targets)
+        "E0.236": low - r * 0.236,
+        "E0.382": low - r * 0.382,
+        "E0.500": low - r * 0.500,
+        "E0.618": low - r * 0.618,
+    }
+
+
+def find_confirmed_fib(
+    fib_price: float,
+    walls: List[OrderbookLevel],
+    last_price: float,
+    max_ticks: int = 3,
+) -> Optional[OrderbookLevel]:
+    """
+    Returns the nearest bid wall within max_ticks of a Fib level.
+    Wall must be BELOW last_price (support only).
+    Returns None if no wall close enough.
+    """
+    tick = get_tick_size(last_price)
+    candidates = [w for w in walls if w.price < last_price]
+    if not candidates:
+        return None
+    nearest = min(candidates, key=lambda w: abs(w.price - fib_price))
+    if abs(nearest.price - fib_price) <= max_ticks * tick:
+        return nearest
+    return None
+
+
+def grounded_three_tier_C(
+    last_price: float,
+    high_price: float,
+    low_price:  float,
+    open_price: float,
+    bid_levels: List[OrderbookLevel],
+    ask_levels: List[OrderbookLevel],
+) -> dict:
+    """
+    Engine C — Fibonacci + Wall Confirmation.
+
+    Entry anchored to Fib retracement/extension from intraday OHLC.
+    Each tier MUST have a bid wall within ±3 ticks to be 'confirmed'.
+    Unconfirmed tiers are marked invalid regardless of R/R.
+
+    Best for: stocks with established intraday range (high > open by ≥1%)
+    """
+    MIN_RR = {"Aggressive": 1.0, "Moderat": 1.5, "Low Risk": 2.0}
+    tick   = get_tick_size(last_price)
+    fibs   = fib_levels_from_ohlc(high_price, low_price)
+
+    # Classify: retracement mode (last > fib levels) or extension mode (broken below)
+    above_last_fibs = {k: v for k, v in fibs.items() if v > last_price}
+    below_last_fibs = {k: v for k, v in fibs.items() if v <= last_price}
+
+    supports    = sorted([w for w in bid_levels if w.price < last_price],
+                         key=lambda w: w.price, reverse=True)
+    resistances = sorted([w for w in ask_levels if w.price > last_price],
+                         key=lambda w: w.price)
+
+    nearest_resist = resistances[0].price - tick if resistances else None
+
+    # Map from tier to candidate Fib level preference (in order of priority)
+    # If last_price already below most retracements → use extension levels
+    extension_mode = len(above_last_fibs) > len(below_last_fibs)
+
+    if extension_mode:
+        agg_fib_candidates  = ["R0.786", "E0.236"]
+        mod_fib_candidates  = ["E0.236", "E0.382"]
+        low_fib_candidates  = ["E0.382", "E0.500", "E0.618"]
+    else:
+        agg_fib_candidates  = ["R0.236", "R0.382"]
+        mod_fib_candidates  = ["R0.382", "R0.500"]
+        low_fib_candidates  = ["R0.618", "R0.786"]
+
+    def _resolve_tier(fib_keys, min_rr_key):
+        """Try each Fib candidate until we find one confirmed by a wall."""
+        for fib_key in fib_keys:
+            fib_price = fibs.get(fib_key, 0)
+            if fib_price <= 0 or fib_price >= last_price:
+                continue
+            wall = find_confirmed_fib(fib_price, supports, last_price, max_ticks=3)
+            entry = round_to_tick(fib_price + tick, last_price)
+            if wall:
+                sl  = round_to_tick(wall.price - tick * 3, last_price)
+            else:
+                # Unconfirmed — use next support as SL, flag as unconfirmed
+                next_support = next(
+                    (w.price for w in supports if w.price < fib_price - tick), None
+                )
+                sl = round_to_tick(next_support - tick if next_support
+                                   else fib_price * 0.97, last_price)
+            tp  = nearest_resist or round_to_tick(last_price * 1.04, last_price)
+            tp  = max(tp, last_price)
+            rr  = _calc_rr(entry, sl, tp)
+            confirmed = wall is not None
+            valid = rr >= MIN_RR[min_rr_key] and confirmed
+            warn_parts = []
+            if not confirmed:
+                warn_parts.append(f"Fib {fib_key} ({fib_price:,.0f}) tidak dikonfirmasi wall dalam ±3 tick — unconfirmed entry.")
+            if rr < MIN_RR[min_rr_key]:
+                warn_parts.append(f"R/R {rr:.2f}x di bawah minimum {MIN_RR[min_rr_key]:.1f}x.")
+            return {
+                "entry":        entry,
+                "sl":           sl,
+                "tp":           tp,
+                "rr":           rr,
+                "fib_key":      fib_key,
+                "fib_level":    round_to_tick(fib_price, last_price),
+                "wall_price":   wall.price if wall else None,
+                "wall_lot":     wall.lot   if wall else None,
+                "wall_score":   None,
+                "wall_round_bonus": round_number_bonus(wall.price) if wall else None,
+                "confirmed":    confirmed,
+                "valid":        valid,
+                "warning":      " | ".join(warn_parts) if warn_parts else None,
+            }
+        # Total fallback if no Fib candidate resolves
+        entry = round_to_tick(last_price * 0.97, last_price)
+        sl    = round_to_tick(last_price * 0.95, last_price)
+        tp    = nearest_resist or round_to_tick(last_price * 1.03, last_price)
+        return {
+            "entry": entry, "sl": sl, "tp": tp,
+            "rr": _calc_rr(entry, sl, tp),
+            "fib_key": None, "fib_level": None,
+            "wall_price": None, "wall_lot": None, "wall_score": None,
+            "wall_round_bonus": None, "confirmed": False,
+            "valid": False,
+            "warning": "Tidak ada Fib level yang valid atau dikonfirmasi wall — fallback only.",
+        }
+
+    agg = _resolve_tier(agg_fib_candidates, "Aggressive")
+    mod = _resolve_tier(mod_fib_candidates, "Moderat")
+    low = _resolve_tier(low_fib_candidates, "Low Risk")
+
+    return {
+        "engine_label":    "Fibonacci + Wall Confirmation (Engine C)",
+        "extension_mode":  extension_mode,
+        "fib_levels":      {k: round_to_tick(v, last_price) for k, v in fibs.items()},
+        "intraday_range":  round(high_price - low_price, 0),
+        "Aggressive":      agg,
+        "Moderat":         mod,
+        "Low Risk":        low,
     }
 
 
