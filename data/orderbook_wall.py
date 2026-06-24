@@ -136,6 +136,7 @@ def _tier_result(tier: str, entry, sl, tp, rr, wall: Optional[WallScore], min_rr
         "wall_price": wall.price if wall else None,
         "wall_lot":   wall.lot   if wall else None,
         "wall_score": round(wall.score, 3) if wall else None,
+        "wall_round_bonus": round(wall.round_bonus, 2) if wall else None,
         "valid":      valid,
         "warning":    warning,
     }
@@ -469,10 +470,14 @@ def grounded_three_tier_B(
         mod_entry = round_to_tick(last_price * (1 - mod_depth * 0.5), last_price)
         mod_sl = round_to_tick(last_price * (1 - mod_depth * 0.7), last_price)
 
-    # Apply TP factor for market context
+    # Apply TP factor for market context (scale the spread, not absolute price)
     raw_mod_tp = nearest_resist or last_price
-    mod_tp = max(round_to_tick(raw_mod_tp * thresholds["tp_factor"], last_price),
-                 last_price)
+    if thresholds["tp_factor"] != 1.0:
+        _move = max(tick, raw_mod_tp - mod_entry)
+        mod_tp = max(mod_entry + round_to_tick(_move * thresholds["tp_factor"], last_price),
+                     last_price + tick)
+    else:
+        mod_tp = max(raw_mod_tp, last_price + tick)
     mod_rr = _calc_rr(mod_entry, mod_sl, mod_tp)
 
     # ── LOW RISK: highest lot×freq×round_bonus in adapted depth ───────────────
@@ -503,8 +508,12 @@ def grounded_three_tier_B(
         low_tp_base = last_price + tick
     if nearest_resist and nearest_resist > low_tp_base * 1.03:
         low_tp_base = nearest_resist
-    low_tp = max(round_to_tick(low_tp_base * thresholds["tp_factor"], last_price),
-                 last_price)
+    if thresholds["tp_factor"] != 1.0:
+        _move = max(tick, low_tp_base - low_entry)
+        low_tp = max(low_entry + round_to_tick(_move * thresholds["tp_factor"], last_price),
+                     last_price + tick)
+    else:
+        low_tp = max(low_tp_base, last_price + tick)
     low_rr = _calc_rr(low_entry, low_sl, low_tp)
 
     return {

@@ -185,7 +185,8 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     )
 
                     score_data = compute_intraday_score(raw_data_obj, hist_row)
-                    tier_warnings = _tier_sanity_warning(strategies_A, snap.last_price, open_price_today, snap.prev_close)
+                    tier_warnings_A = _tier_sanity_warning(strategies_A, snap.last_price, open_price_today, snap.prev_close)
+                    tier_warnings_B = _tier_sanity_warning(strategies_B, snap.last_price, open_price_today, snap.prev_close)
 
                     c1, c2, c3, c4 = st.columns(4)
                     with c1:
@@ -282,6 +283,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
 
                     # Active strategies for sizing (use B if selected, else A)
                     strategies = strategies_B if use_B else strategies_A
+                    tier_warnings = tier_warnings_B if use_B else tier_warnings_A
 
                     # ── Sentiment Badge (Engine B) ────────────────────────────
                     if use_B:
@@ -369,7 +371,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             mod_rr_badge = '✅' if mod.get('valid', True) else '⚠️ R/R Rendah'
                             wall_info_mod = ""
                             if mod.get('wall_price'):
-                                wall_info_mod = f"<li><b>Anchored to Wall:</b> Rp {mod['wall_price']:,.0f} ({mod['wall_lot']:,} lot, score {mod.get('wall_score', 'N/A')})</li>"
+                                wall_info_mod = f"<li><b>Anchored to Wall:</b> Rp {mod['wall_price']:,.0f} ({mod['wall_lot']:,} lot, score {mod.get('wall_score', 'N/A')}"
+                                if mod.get('wall_round_bonus') and mod['wall_round_bonus'] != 1.0:
+                                    wall_info_mod += f", round ×{mod['wall_round_bonus']:.2f}"
+                                wall_info_mod += ")</li>"
                             _mod_entry = mod['entry']
                             _mod_sl = mod['sl']
                             _mod_rps = _mod_entry - _mod_sl if _mod_entry > _mod_sl else 0
@@ -405,7 +410,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             low_rr_badge = '✅' if low.get('valid', True) else '⚠️ R/R Rendah'
                             wall_info_low = ""
                             if low.get('wall_price'):
-                                wall_info_low = f"<li><b>Anchored to Wall:</b> Rp {low['wall_price']:,.0f} ({low['wall_lot']:,} lot, score {low.get('wall_score', 'N/A')})</li>"
+                                wall_info_low = f"<li><b>Anchored to Wall:</b> Rp {low['wall_price']:,.0f} ({low['wall_lot']:,} lot, score {low.get('wall_score', 'N/A')}"
+                                if low.get('wall_round_bonus') and low['wall_round_bonus'] != 1.0:
+                                    wall_info_low += f", round ×{low['wall_round_bonus']:.2f}"
+                                wall_info_low += ")</li>"
                             _low_entry = low['entry']
                             _low_sl = low['sl']
                             _low_rps = _low_entry - _low_sl if _low_entry > _low_sl else 0
