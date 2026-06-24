@@ -1,832 +1,1002 @@
 [
   {
-    "timestamp": "2026-06-12T06:19:42.425322+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:19:44.062347+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:26:01.543311+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:26:03.870465+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:26:59.983225+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:27:01.881632+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:45:34.218164+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:45:36.544157+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:46:31.185288+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 7 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 8 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:46:32.896078+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:49:04.423746+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 4 mismatch: expected 'High', got 'Total Bid Lot'; Column 5 mismatch: expected 'Low', got 'Total Ask Lot'; Column 6 mismatch: expected 'Open', got 'Imbalance Ratio'; Column 7 mismatch: expected 'Volume', got 'Support'; Column 8 mismatch: expected 'Total Bid Lot', got 'Resistance'; Column 9 mismatch: expected 'Total Ask Lot', got 'Source'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Last Update (UTC)'; Missing column 11: expected 'Support (Max Bid Lot)'; Missing column 12: expected 'Resistance (Max Ask Lot)'; Missing column 13: expected 'Source'; Missing column 14: expected 'Last Update (UTC)'"
-  },
-  {
-    "timestamp": "2026-06-12T06:49:06.943346+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:50:01.050720+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support (Max Bid Lot)', got 'Support'; Column 12 mismatch: expected 'Resistance (Max Ask Lot)', got 'Resistance'"
-  },
-  {
-    "timestamp": "2026-06-12T06:50:03.160215+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:51:29.507935+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T06:52:26.498226+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T07:24:00.078904+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T07:24:59.251554+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T07:59:09.522776+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:09:05.363273+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:09:07.936122+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:11:12.288287+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:11:14.772091+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:25:23.272430+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:25:27.894265+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:25:30.256348+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:27:06.533663+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:27:08.799533+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:27:12.692047+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:27:14.808720+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:28:52.810889+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:28:55.072525+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:28:58.929479+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:29:01.330124+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:30:38.921288+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:30:41.169753+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:30:45.046911+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:30:47.372240+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:32:34.648021+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:32:36.733357+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:32:40.308940+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:32:42.484404+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T08:35:02.765506+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:36:42.968635+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:38:26.429377+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:38:33.737398+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
-  },
-  {
-    "timestamp": "2026-06-12T08:40:14.795684+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:40:20.469181+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
-  },
-  {
-    "timestamp": "2026-06-12T08:42:04.453162+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:42:11.572860+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:43:54.492587+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:43:59.927546+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
-  },
-  {
-    "timestamp": "2026-06-12T08:45:40.170730+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T08:45:45.244368+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'Ticker', got 'No'; Column 2 mismatch: expected 'Last Price', got 'Ticker'; Column 3 mismatch: expected 'Change %', got 'Last Price'; Column 4 mismatch: expected 'High', got 'Change %'; Column 5 mismatch: expected 'Low', got 'Open'; Column 6 mismatch: expected 'Open', got 'High'; Column 7 mismatch: expected 'Volume', got 'Low'; Column 8 mismatch: expected 'Total Bid Lot', got 'Volume'; Column 9 mismatch: expected 'Total Ask Lot', got 'Total Bid Lot'; Column 10 mismatch: expected 'Imbalance Ratio', got 'Total Ask Lot'; Column 11 mismatch: expected 'Support', got 'Imbalance Ratio'; Column 12 mismatch: expected 'Resistance', got 'Foreign Net'; Column 13 mismatch: expected 'Source', got 'ARA'; Column 14 mismatch: expected 'Last Update (UTC)', got 'ARB'"
-  },
-  {
-    "timestamp": "2026-06-12T12:12:38.962356+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T12:12:41.226027+00:00",
-    "event": "WRITE_OK",
-    "details": "3 snapshots, 4 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T12:18:04.596642+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T12:18:08.395589+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T12:19:44.454532+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T12:19:47.213006+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T13:00:48.346888+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T13:00:50.965521+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T13:02:25.367447+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T13:02:28.324343+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T13:42:07.018524+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T13:42:09.515895+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T13:46:55.108181+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T13:46:57.796572+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T13:48:34.648809+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T13:48:37.201990+00:00",
-    "event": "WRITE_OK",
-    "details": "20 snapshots, 21 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:26:23.578431+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:26:26.354616+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:28:17.529191+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:28:20.032752+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:35:50.725239+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:35:53.357134+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:37:47.549168+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:37:51.325281+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:39:45.809065+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:39:48.511111+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:41:40.415171+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:41:44.597380+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:43:48.005060+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:43:50.678120+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T14:45:44.627790+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 11 mismatch: expected 'Support', got 'Foreign Net'; Column 12 mismatch: expected 'Resistance', got 'ARA'; Column 13 mismatch: expected 'Source', got 'ARB'; Column 14 mismatch: expected 'Last Update (UTC)', got 'Support'"
-  },
-  {
-    "timestamp": "2026-06-12T14:45:47.266267+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:31:54.189723+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 17 mismatch: expected 'Last Update (UTC)', got 'Last Update (WIB)'"
-  },
-  {
-    "timestamp": "2026-06-12T15:31:55.416891+00:00",
-    "event": "ROLLBACK_BLOCKED",
-    "details": "Sheet timestamp 2026-06-12T22:30:00+00:00 is 25085s ahead of now. Possible manual edit or clock skew. Blocking write."
-  },
-  {
-    "timestamp": "2026-06-12T15:31:56.895854+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:32:01.067795+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:37:41.826395+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:37:45.693918+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:38:35.526890+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T15:38:40.341277+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:22:00.440335+00:00",
-    "event": "ROLLBACK_BLOCKED",
-    "details": "Sheet timestamp 2026-06-12T23:20:00+00:00 is 25080s ahead of now. Possible manual edit or clock skew. Blocking write."
-  },
-  {
-    "timestamp": "2026-06-12T16:22:02.178288+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:25:00.517617+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:25:04.358411+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:25:37.365604+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:25:40.915458+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:26:52.730225+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:26:56.213837+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:28:10.064623+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:28:13.759748+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:29:25.471242+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:29:29.309640+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:30:41.097511+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:30:44.969275+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:31:17.166900+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:31:23.263117+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:33:06.279726+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:33:09.911424+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:33:21.741295+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 17 mismatch: expected 'Last Update (UTC)', got 'Last Update (WIB)'"
-  },
-  {
-    "timestamp": "2026-06-12T16:33:23.551531+00:00",
-    "event": "ROLLBACK_BLOCKED",
-    "details": "Sheet timestamp 2026-06-12T23:31:00+00:00 is 25056s ahead of now. Possible manual edit or clock skew. Blocking write."
-  },
-  {
-    "timestamp": "2026-06-12T16:33:25.790033+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:33:38.228969+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:34:36.372620+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:34:39.723212+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:35:45.211540+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:35:57.787123+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:36:10.977520+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:36:23.361462+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:37:26.145934+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-12T16:37:29.658647+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:45:47.122298+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:45:51.192764+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:47:08.366241+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:47:12.194061+00:00",
-    "event": "WRITE_OK",
-    "details": "26 snapshots, 27 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:48:25.801720+00:00",
-    "event": "WRITE_OK",
-    "details": "30 snapshots, 31 rows total"
-  },
-  {
-    "timestamp": "2026-06-13T03:48:29.404233+00:00",
-    "event": "WRITE_OK",
-    "details": "30 snapshots, 31 rows total"
-  },
-  {
-    "timestamp": "2026-06-14T17:17:10.789551+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-14T17:17:14.509793+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-14T17:58:14.928424+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-14T17:58:18.490188+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:40:20.111085+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:40:24.630793+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:41:44.616823+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:41:49.116525+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:43:11.466512+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:43:15.755659+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:44:35.453087+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:44:39.721425+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:46:00.938625+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T02:46:05.131447+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:33:40.814691+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'No', got 'Ticker'; Column 2 mismatch: expected 'Ticker', got 'Last Price'; Column 3 mismatch: expected 'Company Name', got 'Change %'; Column 4 mismatch: expected 'Sector', got 'High'; Column 5 mismatch: expected 'Sparkline', got 'Low'; Column 6 mismatch: expected 'Price', got 'Open'; Column 7 mismatch: expected 'Change%', got 'Volume'; Column 8 mismatch: expected 'Change', got 'Total Bid Lot'; Column 9 mismatch: expected 'PriceOpen', got 'Total Ask Lot'; Column 10 mismatch: expected 'High', got 'Imbalance Ratio'; Column 11 mismatch: expected 'Low', got 'Foreign Net'; Column 12 mismatch: expected 'ClosePrev', got 'ARA'; Column 13 mismatch: expected 'Gap_Pct', got 'ARB'; Column 14 mismatch: expected 'Gap_Flag', got 'Support'; Column 15 mismatch: expected 'Volume', got 'Resistance'; Column 16 mismatch: expected 'Vol_Avg', got 'Source'; Column 17 mismatch: expected 'Vol_Ratio', got 'Last Update (UTC)'; Missing column 18: expected 'Vol_Flag'; Missing column 19: expected 'Daily_Range_Pct'; Missing column 20: expected 'Vol_Level'; Missing column 21: expected 'MarketCap'; Missing column 22: expected 'PE'; Missing column 23: expected 'PE_Grade'; Missing column 24: expected 'EPS'; Missing column 25: expected 'Beta'; Missing column 26: expected '52W High'; Missing column 27: expected '52W Low'; Missing column 28: expected 'Dist to 52W High'; Missing column 29: expected 'Dist_52W_Low'; Missing column 30: expected '52W_Range_Pct'; Missing column 31: expected 'Range_Signal'; Missing column 32: expected 'MA20'; Missing column 33: expected 'MA50'; Missing column 34: expected 'MA200'; Missing column 35: expected 'Support'; Missing column 36: expected 'Breakout'; Missing column 37: expected 'Reversal'; Missing column 38: expected 'BSJP'; Missing column 39: expected 'Signal'; Missing column 40: expected 'Trend'; Missing column 41: expected 'Score'; Missing column 42: expected 'Score v2'; Missing column 43: expected 'Rank'; Missing column 44: expected 'Final_Signal'; Missing column 45: expected 'SL_Practical'; Missing column 46: expected 'TP_Target'; Missing column 47: expected 'RR_Ratio'; Missing column 48: expected 'ATR14'; Missing column 49: expected 'ATR %'; Missing column 50: expected 'RSI14'; Missing column 51: expected 'RSI Signal'; Missing column 52: expected 'Status'; Missing column 53: expected 'Volume_Flag'; Missing column 54: expected 'Liquidity_Score'; Missing column 55: expected 'Momentum_Score'; Missing column 56: expected 'ARA_Score'; Missing column 57: expected 'ARA_Dist_Pct'; Missing column 58: expected 'ARA_Stage'; Missing column 59: expected 'Gap_Score'; Missing column 60: expected 'Last Update'"
-  },
-  {
-    "timestamp": "2026-06-15T03:33:45.066872+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:38:43.880445+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Missing column 61: expected 'UMA'; Missing column 62: expected 'Corp Action'"
-  },
-  {
-    "timestamp": "2026-06-15T03:38:47.674459+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:43:10.384757+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 61 mismatch: expected 'Total Bid Lot', got 'UMA'; Column 62 mismatch: expected 'Total Ask Lot', got 'Corp Action'; Missing column 63: expected 'Imbalance Ratio'; Missing column 64: expected 'Foreign Net'; Missing column 65: expected 'ARA'; Missing column 66: expected 'ARB'; Missing column 67: expected 'Source'; Missing column 68: expected 'UMA'; Missing column 69: expected 'Corp Action'"
-  },
-  {
-    "timestamp": "2026-06-15T03:43:15.419403+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:43:24.368777+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:54:20.190518+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:54:29.065885+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:55:46.518414+00:00",
-    "event": "STRUCTURE_FAIL",
-    "details": "Column 1 mismatch: expected 'No', got 'Ticker'; Column 2 mismatch: expected 'Ticker', got 'Last Price'; Column 3 mismatch: expected 'Company Name', got 'Change %'; Column 4 mismatch: expected 'Sector', got 'High'; Column 5 mismatch: expected 'Sparkline', got 'Low'; Column 6 mismatch: expected 'Price', got 'Open'; Column 7 mismatch: expected 'Change%', got 'Volume'; Column 8 mismatch: expected 'Change', got 'Total Bid Lot'; Column 9 mismatch: expected 'PriceOpen', got 'Total Ask Lot'; Column 10 mismatch: expected 'High', got 'Imbalance Ratio'; Column 11 mismatch: expected 'Low', got 'Foreign Net'; Column 12 mismatch: expected 'ClosePrev', got 'ARA'; Column 13 mismatch: expected 'Gap_Pct', got 'ARB'; Column 14 mismatch: expected 'Gap_Flag', got 'Support'; Column 15 mismatch: expected 'Volume', got 'Resistance'; Column 16 mismatch: expected 'Vol_Avg', got 'Source'; Column 17 mismatch: expected 'Vol_Ratio', got 'Last Update (UTC)'; Missing column 18: expected 'Vol_Flag'; Missing column 19: expected 'Daily_Range_Pct'; Missing column 20: expected 'Vol_Level'; Missing column 21: expected 'MarketCap'; Missing column 22: expected 'PE'; Missing column 23: expected 'PE_Grade'; Missing column 24: expected 'EPS'; Missing column 25: expected 'Beta'; Missing column 26: expected '52W High'; Missing column 27: expected '52W Low'; Missing column 28: expected 'Dist to 52W High'; Missing column 29: expected 'Dist_52W_Low'; Missing column 30: expected '52W_Range_Pct'; Missing column 31: expected 'Range_Signal'; Missing column 32: expected 'MA20'; Missing column 33: expected 'MA50'; Missing column 34: expected 'MA200'; Missing column 35: expected 'Support'; Missing column 36: expected 'Breakout'; Missing column 37: expected 'Reversal'; Missing column 38: expected 'BSJP'; Missing column 39: expected 'Signal'; Missing column 40: expected 'Trend'; Missing column 41: expected 'Score'; Missing column 42: expected 'Score v2'; Missing column 43: expected 'Rank'; Missing column 44: expected 'Final_Signal'; Missing column 45: expected 'SL_Practical'; Missing column 46: expected 'TP_Target'; Missing column 47: expected 'RR_Ratio'; Missing column 48: expected 'ATR14'; Missing column 49: expected 'ATR %'; Missing column 50: expected 'RSI14'; Missing column 51: expected 'RSI Signal'; Missing column 52: expected 'Status'; Missing column 53: expected 'Volume_Flag'; Missing column 54: expected 'Liquidity_Score'; Missing column 55: expected 'Momentum_Score'; Missing column 56: expected 'ARA_Score'; Missing column 57: expected 'ARA_Dist_Pct'; Missing column 58: expected 'ARA_Stage'; Missing column 59: expected 'Gap_Score'; Missing column 60: expected 'Last Update'; Missing column 61: expected 'Total Bid Lot'; Missing column 62: expected 'Total Ask Lot'; Missing column 63: expected 'Imbalance Ratio'; Missing column 64: expected 'Foreign Net'; Missing column 65: expected 'ARA'; Missing column 66: expected 'ARB'; Missing column 67: expected 'Source'; Missing column 68: expected 'UMA'; Missing column 69: expected 'Corp Action'"
-  },
-  {
-    "timestamp": "2026-06-15T03:55:50.092810+00:00",
-    "event": "WRITE_OK",
-    "details": "1 snapshots, 2 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:55:57.093963+00:00",
-    "event": "WRITE_OK",
-    "details": "1 snapshots, 2 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T03:59:57.956751+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T04:00:09.985852+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T04:02:19.623256+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T04:02:31.645810+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T04:03:39.670164+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T04:03:50.753671+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T05:59:09.599459+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T05:59:19.600060+00:00",
-    "event": "WRITE_OK",
-    "details": "32 snapshots, 33 rows total"
-  },
-  {
-    "timestamp": "2026-06-15T06:01:58.490398+00:00",
+    "timestamp": "2026-06-18T03:48:24.321312+00:00",
     "event": "WRITE_OK",
     "details": "39 snapshots, 40 rows total"
   },
   {
-    "timestamp": "2026-06-15T06:02:08.143280+00:00",
+    "timestamp": "2026-06-18T03:48:36.051710+00:00",
     "event": "WRITE_OK",
     "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:51:14.465988+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:51:23.106303+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:53:56.967512+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:54:05.335634+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:56:49.404277+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:56:59.938428+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T03:59:54.185185+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:00:03.657014+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:02:47.697042+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:02:58.019536+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:05:44.269795+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:05:53.141250+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:08:29.109552+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:08:41.568394+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:12:01.479725+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:12:12.272335+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:14:56.675669+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:15:08.279028+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:17:55.775738+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:18:05.856812+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:20:50.352095+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:21:00.427742+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:23:42.705601+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:23:52.993999+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:26:43.797338+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:26:52.826760+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:29:37.871262+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:29:47.855396+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:32:30.757528+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:32:40.321013+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:35:20.964902+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:35:30.816533+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:38:13.760740+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:38:22.734678+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:41:07.453056+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:41:21.512126+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:44:07.265191+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:44:16.113683+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:46:58.365422+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:47:07.836256+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:49:50.198003+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:49:58.811307+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:52:45.257406+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:52:55.150685+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:55:38.467828+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:55:48.342517+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:58:36.507706+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T04:58:44.877759+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:01:26.085506+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:01:35.384220+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:04:09.359814+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:04:17.693378+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:06:55.291202+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:07:03.856846+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:09:40.455725+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:09:49.021383+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:12:37.920147+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:12:48.439857+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:15:32.920374+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:15:41.554521+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:18:21.465936+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:18:30.673343+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:21:02.970927+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:21:11.254018+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:23:55.381671+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:24:03.884731+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:26:50.838320+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:26:59.231652+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:29:39.214233+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:29:48.187043+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:32:28.024476+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:32:37.594822+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:35:24.530943+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:35:34.734027+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:38:17.651373+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:38:27.367482+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:41:11.038937+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:41:20.154077+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:44:03.131305+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:44:11.275388+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:46:51.557161+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:47:00.810159+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:49:39.990735+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:49:48.355006+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:52:31.671404+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:52:39.564570+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:55:12.150954+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:55:21.956572+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:57:57.023873+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T05:58:09.062109+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:00:48.221480+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:00:56.848691+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:03:47.991701+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:03:57.907260+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:06:45.349034+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:06:54.397497+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:09:37.612660+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:09:45.928586+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:12:22.981483+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:12:32.799528+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:15:25.243773+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:15:36.026637+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:18:22.793886+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:18:36.179664+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:21:19.156386+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:21:27.596289+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:24:07.213785+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:24:15.548591+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:27:06.680176+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:27:15.231521+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:30:04.439924+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:30:14.293246+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:32:43.469638+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:32:52.241542+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:35:43.914189+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:35:53.401220+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:38:38.556442+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:38:49.591550+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:41:39.152113+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:41:51.797910+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:44:33.660526+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:44:59.367503+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:47:52.326598+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:48:01.793075+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:50:54.457767+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:51:10.723094+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:54:02.417489+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:54:15.729607+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:56:59.794002+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:57:12.392129+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T06:59:55.879696+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:00:14.553403+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:03:09.822142+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:03:28.923031+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:06:25.014630+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:06:39.452750+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:09:25.141839+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:09:35.902865+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:12:26.179049+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:12:40.473902+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:15:40.854221+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:16:00.189165+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:18:45.479763+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:19:06.797155+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:21:57.782729+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:22:57.738759+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:25:37.405108+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:25:49.367251+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:28:44.006532+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:29:08.577411+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:31:52.726497+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:32:02.886963+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:34:58.990520+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:35:15.816873+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:37:58.918431+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:38:09.152812+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:40:51.496240+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:41:00.694962+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:43:38.452972+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:43:47.602776+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:46:38.513324+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:46:47.326300+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:49:25.650118+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:49:34.122365+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:52:15.740313+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:52:24.767981+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:55:14.880014+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:55:26.297662+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:58:07.549039+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T07:58:16.398402+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:00:54.132616+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:01:04.313756+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:03:40.634628+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:03:49.243060+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:06:21.523140+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:06:30.377336+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:09:13.353108+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:09:27.180061+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:12:08.824839+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:12:17.663995+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:14:55.177372+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:15:04.703139+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:17:52.771689+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:18:01.672797+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:20:42.014144+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:20:50.613971+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:23:34.655913+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:23:44.288903+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:26:29.916140+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:26:38.166558+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:29:12.810753+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:29:22.320824+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:32:10.059307+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:32:18.864703+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:34:54.347023+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T08:35:37.647520+00:00",
+    "event": "WRITE_OK",
+    "details": "39 snapshots, 40 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T09:19:36.269441+00:00",
+    "event": "WRITE_OK",
+    "details": "37 snapshots, 38 rows total"
+  },
+  {
+    "timestamp": "2026-06-18T09:53:42.375091+00:00",
+    "event": "WRITE_OK",
+    "details": "37 snapshots, 38 rows total"
   }
 ]

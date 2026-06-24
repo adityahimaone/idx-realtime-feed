@@ -4,7 +4,11 @@ import asyncio
 from datetime import datetime
 from data.fetchers import safe_float, fetch_stockbit_detail
 from data.scoring import compute_intraday_score
-from data.orderbook_wall import detect_walls, track_delta, grounded_three_tier, OrderbookLevel
+from data.orderbook_wall import (
+    detect_walls, track_delta, OrderbookLevel, WallScore,
+    grounded_three_tier_A, grounded_three_tier_B,
+    get_sentiment_label,
+)
 from repositories.sqlite_repository import sqlite_repository
 from data.pre_ara import get_ara_price, ara_distance
 
@@ -159,12 +163,29 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     bid_deltas = track_delta(prev_bids, curr_bids, snap.last_price, "bid")
                     ask_deltas = track_delta(prev_asks, curr_asks, snap.last_price, "ask")
 
-                    # Grounded 3-Tier Strategies
-                    strategies = grounded_three_tier(snap.last_price, bid_walls, ask_walls)
-                    score_data = compute_intraday_score(raw_data_obj, hist_row)
-                    
+                    # Grounded 3-Tier Strategies — Dual Engine
+                    strategies_A = grounded_three_tier_A(snap.last_price, curr_bids, curr_asks)
+
+                    # Engine B needs extra context
+                    total_ask_lot = sum(lvl.lot for lvl in snap.ask_levels)
                     open_price_today = snap.open_price if snap.open_price else snap.last_price
-                    tier_warnings = _tier_sanity_warning(strategies, snap.last_price, open_price_today, snap.prev_close)
+                    # Derive avg_price from OHLC (no dedicated avg field available)
+                    _high = snap.high if snap.high else snap.last_price
+                    _low = snap.low if snap.low else snap.last_price
+                    avg_price_est = (open_price_today + _high + _low + snap.last_price) / 4
+
+                    strategies_B = grounded_three_tier_B(
+                        last_price=snap.last_price,
+                        bid_walls=curr_bids,
+                        ask_walls=curr_asks,
+                        total_bid_lot=snap.total_bid_lot,
+                        total_ask_lot=total_ask_lot,
+                        avg_price=avg_price_est,
+                        open_price=open_price_today,
+                    )
+
+                    score_data = compute_intraday_score(raw_data_obj, hist_row)
+                    tier_warnings = _tier_sanity_warning(strategies_A, snap.last_price, open_price_today, snap.prev_close)
 
                     c1, c2, c3, c4 = st.columns(4)
                     with c1:
@@ -202,54 +223,12 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             <span>TS: {datetime.now(WIB).strftime('%H:%M:%S')} WIB (Live)</span>
                         </div>
                         """, unsafe_allow_html=True)
-                         # Calculate position sizes
+                         # Calculate position sizes (base values used by _render_strategy_cards)
                     base_portfolio = total_portfolio_value if total_portfolio_value > 0 else 100_000_000.0
                     is_default_port = total_portfolio_value <= 0
-                    
-                    risk_budget = 0.01 # 1% of portfolio risk
+                    risk_budget = 0.01  # 1% of portfolio risk
                     risk_amount = base_portfolio * risk_budget
-                    
-                    # Aggressive
-                    agg_entry = strategies['Aggressive']['entry']
-                    agg_sl = strategies['Aggressive']['sl']
-                    agg_risk_per_share = agg_entry - agg_sl if agg_entry > agg_sl else 0
-                    agg_lots_by_risk = int(risk_amount / (agg_risk_per_share * 100)) if agg_risk_per_share > 0 else 0
-                    agg_lots_by_cap = int((base_portfolio * 0.10) / (agg_entry * 100)) if agg_entry > 0 else 0
-                    agg_lots = min(agg_lots_by_risk, agg_lots_by_cap) if agg_risk_per_share > 0 else agg_lots_by_cap
-                    agg_val = agg_lots * agg_entry * 100
-                    agg_risk_val = agg_lots * agg_risk_per_share * 100
-                    if agg_risk_per_share <= 0:
-                        risk_display_agg = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
-                    else:
-                        risk_display_agg = f"Rp {agg_risk_val:,.0f} ({agg_risk_val/base_portfolio*100:.2f}%)"
-                    
-                    # Moderate
-                    mod_entry = strategies['Moderat']['entry']
-                    mod_sl = strategies['Moderat']['sl']
-                    mod_risk_per_share = mod_entry - mod_sl if mod_entry > mod_sl else 0
-                    mod_lots_by_risk = int(risk_amount / (mod_risk_per_share * 100)) if mod_risk_per_share > 0 else 0
-                    mod_lots_by_cap = int((base_portfolio * 0.15) / (mod_entry * 100)) if mod_entry > 0 else 0
-                    mod_lots = min(mod_lots_by_risk, mod_lots_by_cap) if mod_risk_per_share > 0 else mod_lots_by_cap
-                    mod_val = mod_lots * mod_entry * 100
-                    mod_risk_val = mod_lots * mod_risk_per_share * 100
-                    if mod_risk_per_share <= 0:
-                        risk_display_mod = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
-                    else:
-                        risk_display_mod = f"Rp {mod_risk_val:,.0f} ({mod_risk_val/base_portfolio*100:.2f}%)"
-                    
-                    # Low Risk
-                    low_entry = strategies['Low Risk']['entry']
-                    low_sl = strategies['Low Risk']['sl']
-                    low_risk_per_share = low_entry - low_sl if low_entry > low_sl else 0
-                    low_lots_by_risk = int(risk_amount / (low_risk_per_share * 100)) if low_risk_per_share > 0 else 0
-                    low_lots_by_cap = int((base_portfolio * 0.20) / (low_entry * 100)) if low_entry > 0 else 0
-                    low_lots = min(low_lots_by_risk, low_lots_by_cap) if low_risk_per_share > 0 else low_lots_by_cap
-                    low_val = low_lots * low_entry * 100
-                    low_risk_val = low_lots * low_risk_per_share * 100
-                    if low_risk_per_share <= 0:
-                        risk_display_low = "⚠️ SL tidak valid — stop loss di atas atau sama dengan entry"
-                    else:
-                        risk_display_low = f"Rp {low_risk_val:,.0f} ({low_risk_val/base_portfolio*100:.2f}%)"
+
 
                     # Cross-link from portfolio
                     held_asset = next((a for a in st.session_state.get("portfolio", []) if a["Ticker"] == selected_detail), None)
@@ -263,13 +242,74 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         📌 <b>Posisi aktif:</b> {cur_lots:,} lot @ Rp {cur_avg:,.0f} avg
                         — P/L saat ini: <span style="color:{pl_color};font-weight:700;">{pl_pct:+.2f}%</span>.
                         Mau average down? Buka tab <b>💼 Live Portfolio Tracker</b> → Average Down Calculator,
-                        pakai entry Low Risk (Rp {strategies['Low Risk']['entry']:,.0f}) sebagai referensi harga
+                        pakai entry Low Risk (Rp {strategies_A['Low Risk']['entry']:,.0f}) sebagai referensi harga
                         kalau memang masih dalam batas wajar (lihat warning gap di atas kalau ada).
                         </div>
                         """, unsafe_allow_html=True)
  
                     # 3-Tier Strategies
                     st.markdown("### 🎯 Grounded 3-Tier Execution Strategies (Orderbook Based)")
+                    st.markdown("""
+                    <style>
+                    .strategy-invalid {
+                        opacity: 0.55;
+                        border: 1px dashed #FF6B6B !important;
+                        filter: grayscale(40%);
+                    }
+                    .strategy-disabled {
+                        opacity: 0.35;
+                        border: 1px dashed #888 !important;
+                        filter: grayscale(70%);
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+
+                    # ── Engine Selector ────────────────────────────────────────
+                    imb = snap.imbalance_ratio if snap.imbalance_ratio else 1.0
+                    auto_idx = 1 if imb < 0.8 else 0
+                    engine_choice = st.radio(
+                        "🔧 Engine Mode:",
+                        ["Engine A — Wall Gravity (Neutral/Bullish)",
+                         "Engine B — Contextual Alpha (Bearish/Volatile)",
+                         "Both (Compare)"],
+                        horizontal=True,
+                        index=auto_idx,
+                        key="engine_mode_radio",
+                    )
+                    use_A = "A" in engine_choice or "Both" in engine_choice
+                    use_B = "B" in engine_choice or "Both" in engine_choice
+                    is_both = "Both" in engine_choice
+
+                    # Active strategies for sizing (use B if selected, else A)
+                    strategies = strategies_B if use_B else strategies_A
+
+                    # ── Sentiment Badge (Engine B) ────────────────────────────
+                    if use_B:
+                        sent_val = strategies_B.get('sentiment_factor', 1.0)
+                        sent_lbl = strategies_B.get('sentiment_label', 'N/A')
+                        sent_colors = {
+                            "Very Bearish": "#FF4444",
+                            "Bearish":      "#FF8C00",
+                            "Mild Bearish": "#FFD700",
+                            "Neutral":      "#AAAAAA",
+                            "Bullish":      "#00D4AA",
+                        }
+                        sc_color = sent_colors.get(sent_lbl, "#AAAAAA")
+                        agg_disabled_msg = "| ⛔ Aggressive tier DISABLED" if not strategies_B.get('aggressive_enabled') else ""
+                        depth_cfg = strategies_B.get('depth_config', {})
+                        st.markdown(f"""
+                        <div style="background:#1a1a2e; border-left:4px solid {sc_color}; padding:10px;
+                                    border-radius:6px; margin-bottom:12px;">
+                            🎯 <b>Market Sentiment (Engine B):</b>
+                            <span style="color:{sc_color}; font-weight:700;">{sent_lbl}</span>
+                            — factor <code>{sent_val}</code>
+                            {agg_disabled_msg}
+                            | Bid/Ask: <code>{imb:.2f}x</code>
+                            | Depth: Mod {depth_cfg.get('moderate_depth', 0.08)*100:.0f}% / LR {depth_cfg.get('low_risk_depth', 0.15)*100:.0f}%
+                            | TP factor: <code>{depth_cfg.get('tp_factor', 1.0)}</code>
+                        </div>
+                        """, unsafe_allow_html=True)
+
                     if is_default_port:
                         st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
                     else:
@@ -277,53 +317,137 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     st.caption("🛡️ *Sizing uses risk-first allocation: risking 1.0% of portfolio value per trade (max loss), capped at the maximum capital allocation tier.*")
                     st.caption("⚠️ *Penting: Pilih salah satu skenario entry di bawah yang paling sesuai dengan aksi pasar nyata — jangan mengambil kombinasi ketiganya sekaligus (total 45% portofolio).*")
                         
-                    sc1, sc2, sc3 = st.columns(3)
-                    with sc1:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                        <h3 style="color: #FF6B6B">🔥 Aggressive (Breakout Play)</h3>
-                        <ul>
-                            <li><b>Entry:</b> IDR {strategies['Aggressive']['entry']:,.0f}</li>
-                            <li><b>Target (TP):</b> IDR {strategies['Aggressive']['tp']:,.0f}</li>
-                            <li><b>Stop Loss (SL):</b> IDR {strategies['Aggressive']['sl']:,.0f}</li>
-                            <li><b>R/R Ratio:</b> {strategies['Aggressive']['rr']}x</li>
-                            <li><b>Suggested Size (10% cap):</b> <b style="color:#FF6B6B;">{agg_lots:,} Lots</b> (Rp {agg_val:,.0f})</li>
-                            <li><b>Max Loss at SL:</b> {risk_display_agg}</li>
-                        </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with sc2:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                            <h3 style="color: #FFFF00">⚡ Moderate (Pullback Play)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Moderat']['entry']:,.0f}</li>
-                                <li><b>Target (TP):</b> IDR {strategies['Moderat']['tp']:,.0f}</li>
-                                <li><b>Stop Loss (SL):</b> IDR {strategies['Moderat']['sl']:,.0f}</li>
-                                <li><b>R/R Ratio:</b> {strategies['Moderat']['rr']}x</li>
-                                <li><b>Suggested Size (15% cap):</b> <b style="color:#FFFF00;">{mod_lots:,} Lots</b> (Rp {mod_val:,.0f})</li>
-                                <li><b>Max Loss at SL:</b> {risk_display_mod}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        if "Moderat" in tier_warnings:
-                            st.caption(f"🚨 {tier_warnings['Moderat']}")
-                    with sc3:
-                        st.markdown(f"""
-                        <div class="strategy-card">
-                            <h3 style="color: #00D4AA">🛡️ Low Risk (Support Buy)</h3>
-                            <ul>
-                                <li><b>Entry:</b> IDR {strategies['Low Risk']['entry']:,.0f}</li>
-                                <li><b>Target (TP):</b> IDR {strategies['Low Risk']['tp']:,.0f}</li>
-                                <li><b>Stop Loss (SL):</b> IDR {strategies['Low Risk']['sl']:,.0f}</li>
-                                <li><b>R/R Ratio:</b> {strategies['Low Risk']['rr']}x</li>
-                                <li><b>Suggested Size (20% cap):</b> <b style="color:#00D4AA;">{low_lots:,} Lots</b> (Rp {low_val:,.0f})</li>
-                                <li><b>Max Loss at SL:</b> {risk_display_low}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        if "Low Risk" in tier_warnings:
-                            st.caption(f"🚨 {tier_warnings['Low Risk']}")
+                    # ── Render strategy cards (helper to avoid duplication) ─
+                    def _render_strategy_cards(strats, label_suffix=""):
+                        """Render 3 strategy columns for a given engine output."""
+                        sc1, sc2, sc3 = st.columns(3)
+
+                        # --- Aggressive ---
+                        with sc1:
+                            agg = strats['Aggressive']
+                            agg_disabled = agg.get('entry') is None
+                            if agg_disabled:
+                                st.markdown(f"""
+                                <div class="strategy-card strategy-disabled">
+                                <h3 style="color: #888">🔥 Aggressive{label_suffix} — DISABLED</h3>
+                                <p style="color:#FF6B6B; padding:12px;">⛔ {agg.get('warning', 'Disabled by sentiment filter.')}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                agg_valid_class = '' if agg.get('valid', True) else 'strategy-invalid'
+                                agg_rr_badge = '✅' if agg.get('valid', True) else '⚠️ R/R Rendah'
+                                # Position sizing
+                                _agg_entry = agg['entry']
+                                _agg_sl = agg['sl']
+                                _agg_rps = _agg_entry - _agg_sl if _agg_entry > _agg_sl else 0
+                                _agg_lots_risk = int(risk_amount / (_agg_rps * 100)) if _agg_rps > 0 else 0
+                                _agg_lots_cap = int((base_portfolio * 0.10) / (_agg_entry * 100)) if _agg_entry > 0 else 0
+                                _agg_lots = min(_agg_lots_risk, _agg_lots_cap) if _agg_rps > 0 else _agg_lots_cap
+                                _agg_val = _agg_lots * _agg_entry * 100
+                                _agg_risk_val = _agg_lots * _agg_rps * 100
+                                _risk_disp_agg = f"Rp {_agg_risk_val:,.0f} ({_agg_risk_val/base_portfolio*100:.2f}%)" if _agg_rps > 0 else "⚠️ SL tidak valid"
+                                st.markdown(f"""
+                                <div class="strategy-card {agg_valid_class}">
+                                <h3 style="color: #FF6B6B">🔥 Aggressive{label_suffix} (Breakout Play)</h3>
+                                <ul>
+                                    <li><b>Entry:</b> IDR {_agg_entry:,.0f}</li>
+                                    <li><b>Target (TP):</b> IDR {agg['tp']:,.0f}</li>
+                                    <li><b>Stop Loss (SL):</b> IDR {_agg_sl:,.0f}</li>
+                                    <li><b>R/R Ratio:</b> {agg['rr']}x {agg_rr_badge}</li>
+                                    <li><b>Suggested Size (10% cap):</b> <b style="color:#FF6B6B;">{_agg_lots:,} Lots</b> (Rp {_agg_val:,.0f})</li>
+                                    <li><b>Max Loss at SL:</b> {_risk_disp_agg}</li>
+                                </ul>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                if not agg.get('valid', True):
+                                    st.warning(f"⚠️ **Aggressive**: {agg['warning']}")
+
+                        # --- Moderate ---
+                        with sc2:
+                            mod = strats['Moderat']
+                            mod_valid_class = '' if mod.get('valid', True) else 'strategy-invalid'
+                            mod_rr_badge = '✅' if mod.get('valid', True) else '⚠️ R/R Rendah'
+                            wall_info_mod = ""
+                            if mod.get('wall_price'):
+                                wall_info_mod = f"<li><b>Anchored to Wall:</b> Rp {mod['wall_price']:,.0f} ({mod['wall_lot']:,} lot, score {mod.get('wall_score', 'N/A')})</li>"
+                            _mod_entry = mod['entry']
+                            _mod_sl = mod['sl']
+                            _mod_rps = _mod_entry - _mod_sl if _mod_entry > _mod_sl else 0
+                            _mod_lots_risk = int(risk_amount / (_mod_rps * 100)) if _mod_rps > 0 else 0
+                            _mod_lots_cap = int((base_portfolio * 0.15) / (_mod_entry * 100)) if _mod_entry > 0 else 0
+                            _mod_lots = min(_mod_lots_risk, _mod_lots_cap) if _mod_rps > 0 else _mod_lots_cap
+                            _mod_val = _mod_lots * _mod_entry * 100
+                            _mod_risk_val = _mod_lots * _mod_rps * 100
+                            _risk_disp_mod = f"Rp {_mod_risk_val:,.0f} ({_mod_risk_val/base_portfolio*100:.2f}%)" if _mod_rps > 0 else "⚠️ SL tidak valid"
+                            st.markdown(f"""
+                            <div class="strategy-card {mod_valid_class}">
+                                <h3 style="color: #FFFF00">⚡ Moderate{label_suffix} (Pullback Play)</h3>
+                                <ul>
+                                    <li><b>Entry:</b> IDR {_mod_entry:,.0f}</li>
+                                    <li><b>Target (TP):</b> IDR {mod['tp']:,.0f}</li>
+                                    <li><b>Stop Loss (SL):</b> IDR {_mod_sl:,.0f}</li>
+                                    <li><b>R/R Ratio:</b> {mod['rr']}x {mod_rr_badge}</li>
+                                    {wall_info_mod}
+                                    <li><b>Suggested Size (15% cap):</b> <b style="color:#FFFF00;">{_mod_lots:,} Lots</b> (Rp {_mod_val:,.0f})</li>
+                                    <li><b>Max Loss at SL:</b> {_risk_disp_mod}</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if not mod.get('valid', True):
+                                st.warning(f"⚠️ **Moderat**: {mod['warning']}")
+                            if "Moderat" in tier_warnings:
+                                st.caption(f"🚨 {tier_warnings['Moderat']}")
+
+                        # --- Low Risk ---
+                        with sc3:
+                            low = strats['Low Risk']
+                            low_valid_class = '' if low.get('valid', True) else 'strategy-invalid'
+                            low_rr_badge = '✅' if low.get('valid', True) else '⚠️ R/R Rendah'
+                            wall_info_low = ""
+                            if low.get('wall_price'):
+                                wall_info_low = f"<li><b>Anchored to Wall:</b> Rp {low['wall_price']:,.0f} ({low['wall_lot']:,} lot, score {low.get('wall_score', 'N/A')})</li>"
+                            _low_entry = low['entry']
+                            _low_sl = low['sl']
+                            _low_rps = _low_entry - _low_sl if _low_entry > _low_sl else 0
+                            _low_lots_risk = int(risk_amount / (_low_rps * 100)) if _low_rps > 0 else 0
+                            _low_lots_cap = int((base_portfolio * 0.20) / (_low_entry * 100)) if _low_entry > 0 else 0
+                            _low_lots = min(_low_lots_risk, _low_lots_cap) if _low_rps > 0 else _low_lots_cap
+                            _low_val = _low_lots * _low_entry * 100
+                            _low_risk_val = _low_lots * _low_rps * 100
+                            _risk_disp_low = f"Rp {_low_risk_val:,.0f} ({_low_risk_val/base_portfolio*100:.2f}%)" if _low_rps > 0 else "⚠️ SL tidak valid"
+                            st.markdown(f"""
+                            <div class="strategy-card {low_valid_class}">
+                                <h3 style="color: #00D4AA">🛡️ Low Risk{label_suffix} (Support Buy)</h3>
+                                <ul>
+                                    <li><b>Entry:</b> IDR {_low_entry:,.0f}</li>
+                                    <li><b>Target (TP):</b> IDR {low['tp']:,.0f}</li>
+                                    <li><b>Stop Loss (SL):</b> IDR {_low_sl:,.0f}</li>
+                                    <li><b>R/R Ratio:</b> {low['rr']}x {low_rr_badge}</li>
+                                    {wall_info_low}
+                                    <li><b>Suggested Size (20% cap):</b> <b style="color:#00D4AA;">{_low_lots:,} Lots</b> (Rp {_low_val:,.0f})</li>
+                                    <li><b>Max Loss at SL:</b> {_risk_disp_low}</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if not low.get('valid', True):
+                                st.warning(f"⚠️ **Low Risk**: {low['warning']}")
+                            if "Low Risk" in tier_warnings:
+                                st.caption(f"🚨 {tier_warnings['Low Risk']}")
+
+                    # ── Render based on engine choice ─────────────────────────
+                    if is_both:
+                        st.markdown("#### 🅰️ Engine A — Wall Gravity")
+                        st.caption("Pure structural analysis. No market context.")
+                        _render_strategy_cards(strategies_A, " [A]")
+
+                        st.markdown("---")
+                        st.markdown("#### 🅱️ Engine B — Contextual Alpha")
+                        st.caption(f"Sentiment-adjusted. Factor: {strategies_B.get('sentiment_factor', '?')}x ({strategies_B.get('sentiment_label', '?')})")
+                        _render_strategy_cards(strategies_B, " [B]")
+                    else:
+                        engine_lbl = strategies.get('engine_label', 'Wall Gravity')
+                        st.caption(f"🔧 Active Engine: **{engine_lbl}**")
+                        _render_strategy_cards(strategies)
 
                     # Display Walls and Deltas
                     st.markdown("### 🧱 Orderbook Wall & Delta Signals")

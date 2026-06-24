@@ -26,9 +26,21 @@ The primary frontend interface of the application. It visualizes live feeds, agg
    - Track active holdings, invested value, current value, and profit/loss in real-time.
    - **Average Down Calculator**: Simulate adding lots to an existing position. Automatically computes the weighted average buy price, new breakeven distance, and ticker risk concentration. Warns when a single ticker represents >25% of the total portfolio value. Apply average down directly to update the database with a single click.
 
-### 🚀 How to Run the Dashboard:
+### 🚀 How to Run, Stop, and Restart the Dashboard:
+
+**Start the dashboard:**
 ```bash
 uv run streamlit run app.py --server.port 8501
+```
+
+**Stop the dashboard running on port 8501:**
+```bash
+kill -9 $(lsof -t -i:8501)
+```
+
+**Restart the dashboard (force-kills port 8501 and restarts):**
+```bash
+kill -9 $(lsof -t -i:8501) 2>/dev/null; uv run streamlit run app.py --server.port 8501
 ```
 
 ---

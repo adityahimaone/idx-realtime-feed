@@ -17,6 +17,7 @@ from ui.tabs.tab4_trending import render_tab4
 from ui.tabs.tab9_pre_ara import render_tab9
 from ui.tabs.tab10_elliott_wave import render_tab10
 from ui.tabs.tab7_deep_analysis import render_tab7
+from ui.tabs.tab13_twitter_watchlist import render_tab13_twitter
 from ui.components.status_bar import render_status_board, render_ihsg_widget
 
 # Mitigate yfinance cache locking issues in parallel execution
@@ -1127,7 +1128,7 @@ if st.session_state.portfolio:
 # ============================================================================
 # TABS SYSTEM SETUP
 # ============================================================================
-tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1, tab_cal = st.tabs([
+tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1, tab_cal, tab_tw = st.tabs([
     "🏆 Top Picks",
     "🎯 Intraday Buy Recommendations",
     "⭐ Custom Watchlist",
@@ -1141,7 +1142,8 @@ tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, 
     "📰 News-Based Signals",
     "🌊 Elliott Wave",
     "📋 Active Tickers Pool",
-    "📅 Corporate Calendar"
+    "📅 Corporate Calendar",
+    "🐦 Twitter Watchlist"
 ])
 
 # ============================================================================
@@ -1514,3 +1516,9 @@ with tab_cal:
     from ui.tabs.tab12_calendar import render_tab12
     render_tab12()
 
+with tab_tw:
+    render_tab13_twitter(
+        ticker_df=ticker_df,
+        scored_list=scored_list,
+        screener_data_map=st.session_state.screener_data,
+    )
