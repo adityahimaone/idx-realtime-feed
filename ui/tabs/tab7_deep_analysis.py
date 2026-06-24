@@ -302,7 +302,9 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     ]
                     if engine_c_available:
                         engine_options.append("Engine C — Fibonacci Confirmation (Range Day)")
-                    engine_options.append("Both A+B (Compare)")
+                        engine_options.append("Compare All Engines (A+B+C)")
+                    else:
+                        engine_options.append("Compare Engines (A+B)")
 
                     # Auto-suggest logic (smarter):
                     avg_above_last = avg_price_est > snap.last_price
@@ -324,10 +326,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         index=auto_idx,
                         key="engine_mode_radio",
                     )
-                    use_A = "A" in engine_choice or "Both" in engine_choice
-                    use_B = "B" in engine_choice or "Both" in engine_choice
-                    use_C = "C" in engine_choice
-                    is_both = "Both" in engine_choice
+                    use_A = "Engine A" in engine_choice or "Compare" in engine_choice
+                    use_B = "Engine B" in engine_choice or "Compare" in engine_choice
+                    use_C = "Engine C" in engine_choice or ("Compare" in engine_choice and engine_c_available)
+                    is_compare = "Compare" in engine_choice
 
                     # Active strategies for sizing
                     if use_C:
@@ -518,7 +520,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                                 st.caption(f"🚨 {tier_warnings_local['Low Risk']}")
 
                     # ── Render based on engine choice ─────────────────────────
-                    if is_both:
+                    if is_compare:
                         st.markdown("#### 🅰️ Engine A — Wall Gravity")
                         st.caption("Pure structural analysis. No market context.")
                         _render_strategy_cards(strategies_A, " [A]", tw=tier_warnings_A)
@@ -527,6 +529,12 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         st.markdown("#### 🅱️ Engine B — Contextual Alpha")
                         st.caption(f"Sentiment-adjusted. Factor: {strategies_B.get('sentiment_factor', '?')}x ({strategies_B.get('sentiment_label', '?')})")
                         _render_strategy_cards(strategies_B, " [B]", tw=tier_warnings_B)
+
+                        if engine_c_available and strategies_C:
+                            st.markdown("---")
+                            st.markdown("#### 🅲️ Engine C — Fibonacci Confirmation")
+                            st.caption(f"Fibonacci & Wall Confirmed. Range: {strategies_C.get('intraday_range', 0):,.0f} pts ({fib_range_pct:.1f}%)")
+                            _render_strategy_cards(strategies_C, " [C]", tw=tier_warnings_C)
                     else:
                         engine_lbl = strategies.get('engine_label', 'Wall Gravity')
                         st.caption(f"🔧 Active Engine: **{engine_lbl}**")
