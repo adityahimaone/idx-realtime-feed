@@ -49,6 +49,10 @@ def render_tab9(scored_list):
         proximity = ara_proximity_score(price, prev_close, ara_price)
         dist_pct = ara_distance(price, ara_price)
 
+        # Pre-filter immediately to optimize performance and prevent slow API queries
+        if proximity < 40:
+            continue
+
         # VSR: vol_today / vol_avg
         volume = safe_float(raw.get("volume", 0))
         avg_vol = safe_float(hist.get("Vol_Avg", 1))
@@ -79,10 +83,6 @@ def render_tab9(scored_list):
         }
         score = pre_ara_score(sig)
         label = classify_pre_ara(score, proximity)
-
-        # Show all candidates that pass pre-filter (proximity ≥ 40)
-        if proximity < 40:
-            continue
 
         rows.append({
             "Ticker": s["Ticker"],

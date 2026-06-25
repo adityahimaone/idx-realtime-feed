@@ -7,8 +7,13 @@ IDX 2024 ARA rules:
 ARB: −7% semua tier (Papan Utama & Pengembangan).
 """
 import math
+import time
 import yfinance as yf
 from data.fetchers import safe_float
+
+# Cache dictionary to prevent redundant yfinance API calls during live feeds
+_streak_cache = {}
+CACHE_TTL_SEC = 900  # Cache duration of 15 minutes
 
 
 def get_tick_size(price: float) -> int:
@@ -95,16 +100,28 @@ def detect_ara_streak(symbol: str, days: int = 5) -> dict:
     """
     Check consecutive ARA days using yfinance historical data.
     Returns streak count and riding flag.
+    Cached for 15 minutes to maximize live execution speed.
     """
+    now = time.time()
+    cache_key = (symbol, days)
+    if cache_key in _streak_cache:
+        cached_res, expiry = _streak_cache[cache_key]
+        if now < expiry:
+            return cached_res
+
     try:
         ticker = yf.Ticker(f"{symbol}.JK")
         hist = ticker.history(period=f"{days + 2}d", interval="1d")
     except Exception:
-        # If ticker not found or yfinance error, return 0 streak
-        return {"streak": 0, "consecutive_ara": False, "is_riding": False}
+        # Cache errors for a shorter period (5 minutes) to avoid continuous failure loops
+        res = {"streak": 0, "consecutive_ara": False, "is_riding": False}
+        _streak_cache[cache_key] = (res, now + 300)
+        return res
 
     if hist.empty or len(hist) < 2:
-        return {"streak": 0, "consecutive_ara": False, "is_riding": False}
+        res = {"streak": 0, "consecutive_ara": False, "is_riding": False}
+        _streak_cache[cache_key] = (res, now + 300)
+        return res
 
     streak = 0
     closes = hist["Close"].values
@@ -123,11 +140,13 @@ def detect_ara_streak(symbol: str, days: int = 5) -> dict:
         else:
             break
 
-    return {
+    res = {
         "streak": streak,
         "consecutive_ara": streak >= 1,
         "is_riding": streak >= 2,
     }
+    _streak_cache[cache_key] = (res, now + CACHE_TTL_SEC)
+    return res
 
 
 def momentum_acceleration(df_5m) -> dict:
