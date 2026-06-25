@@ -294,83 +294,37 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                     </style>
                     """, unsafe_allow_html=True)
 
-                    # ── Engine Selector ────────────────────────────────────────
+                    # ── Engine Context & Badges ────────────────────────────────
                     imb = snap.imbalance_ratio if snap.imbalance_ratio else 1.0
-                    engine_options = [
-                        "Engine A — Wall Gravity (Neutral/Bullish)",
-                        "Engine B — Contextual Alpha (Bearish/Volatile)"
-                    ]
-                    if engine_c_available:
-                        engine_options.append("Engine C — Fibonacci Confirmation (Range Day)")
-                        engine_options.append("Compare All Engines (A+B+C)")
-                    else:
-                        engine_options.append("Compare Engines (A+B)")
-
-                    # Auto-suggest logic (smarter):
-                    avg_above_last = avg_price_est > snap.last_price
-                    trending_down  = snap.last_price < open_price_today
-                    is_bearish     = (imb < 0.8) or (avg_above_last and trending_down)
-                    is_range_day   = engine_c_available
-
-                    if is_range_day and not is_bearish:
-                        auto_idx = engine_options.index("Engine C — Fibonacci Confirmation (Range Day)")
-                    elif is_bearish:
-                        auto_idx = 1  # Engine B
-                    else:
-                        auto_idx = 0  # Engine A
-
-                    engine_choice = st.radio(
-                        "🔧 Engine Mode:",
-                        engine_options,
-                        horizontal=True,
-                        index=auto_idx,
-                        key="engine_mode_radio",
-                    )
-                    use_A = "Engine A" in engine_choice or "Compare" in engine_choice
-                    use_B = "Engine B" in engine_choice or "Compare" in engine_choice
-                    use_C = "Engine C" in engine_choice or ("Compare" in engine_choice and engine_c_available)
-                    is_compare = "Compare" in engine_choice
-
-                    # Active strategies for sizing
-                    if use_C:
-                        strategies = strategies_C
-                        tier_warnings = tier_warnings_C
-                    elif use_B:
-                        strategies = strategies_B
-                        tier_warnings = tier_warnings_B
-                    else:
-                        strategies = strategies_A
-                        tier_warnings = tier_warnings_A
 
                     # ── Sentiment Badge (Engine B) ────────────────────────────
-                    if use_B:
-                        sent_val = strategies_B.get('sentiment_factor', 1.0)
-                        sent_lbl = strategies_B.get('sentiment_label', 'N/A')
-                        sent_colors = {
-                            "Very Bearish": "#FF4444",
-                            "Bearish":      "#FF8C00",
-                            "Mild Bearish": "#FFD700",
-                            "Neutral":      "#AAAAAA",
-                            "Bullish":      "#00D4AA",
-                        }
-                        sc_color = sent_colors.get(sent_lbl, "#AAAAAA")
-                        agg_disabled_msg = "| ⛔ Aggressive tier DISABLED" if not strategies_B.get('aggressive_enabled') else ""
-                        depth_cfg = strategies_B.get('depth_config', {})
-                        st.markdown(f"""
-                        <div style="background:#1a1a2e; border-left:4px solid {sc_color}; padding:10px;
-                                    border-radius:6px; margin-bottom:12px;">
-                            🎯 <b>Market Sentiment (Engine B):</b>
-                            <span style="color:{sc_color}; font-weight:700;">{sent_lbl}</span>
-                            — factor <code>{sent_val}</code>
-                            {agg_disabled_msg}
-                            | Bid/Ask: <code>{imb:.2f}x</code>
-                            | Depth: Mod {depth_cfg.get('moderate_depth', 0.08)*100:.0f}% / LR {depth_cfg.get('low_risk_depth', 0.15)*100:.0f}%
-                            | TP factor: <code>{depth_cfg.get('tp_factor', 1.0)}</code>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    sent_val = strategies_B.get('sentiment_factor', 1.0)
+                    sent_lbl = strategies_B.get('sentiment_label', 'N/A')
+                    sent_colors = {
+                        "Very Bearish": "#FF4444",
+                        "Bearish":      "#FF8C00",
+                        "Mild Bearish": "#FFD700",
+                        "Neutral":      "#AAAAAA",
+                        "Bullish":      "#00D4AA",
+                    }
+                    sc_color = sent_colors.get(sent_lbl, "#AAAAAA")
+                    agg_disabled_msg = "| ⛔ Aggressive tier DISABLED" if not strategies_B.get('aggressive_enabled') else ""
+                    depth_cfg = strategies_B.get('depth_config', {})
+                    st.markdown(f"""
+                    <div style="background:#1a1a2e; border-left:4px solid {sc_color}; padding:10px;
+                                border-radius:6px; margin-bottom:12px;">
+                        🎯 <b>Market Sentiment (Engine B):</b>
+                        <span style="color:{sc_color}; font-weight:700;">{sent_lbl}</span>
+                        — factor <code>{sent_val}</code>
+                        {agg_disabled_msg}
+                        | Bid/Ask: <code>{imb:.2f}x</code>
+                        | Depth: Mod {depth_cfg.get('moderate_depth', 0.08)*100:.0f}% / LR {depth_cfg.get('low_risk_depth', 0.15)*100:.0f}%
+                        | TP factor: <code>{depth_cfg.get('tp_factor', 1.0)}</code>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                     # ── Fibonacci Badge (Engine C) ────────────────────────────
-                    if use_C and strategies_C and "fib_levels" in strategies_C:
+                    if strategies_C and "fib_levels" in strategies_C:
                         ext_mode = strategies_C.get('extension_mode', False)
                         rng = strategies_C.get('intraday_range', 0)
                         mode_str = "🔻 Extension Mode (price below all retracements)" if ext_mode \
@@ -519,26 +473,23 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             if "Low Risk" in tier_warnings_local:
                                 st.caption(f"🚨 {tier_warnings_local['Low Risk']}")
 
-                    # ── Render based on engine choice ─────────────────────────
-                    if is_compare:
-                        st.markdown("#### 🅰️ Engine A — Wall Gravity")
-                        st.caption("Pure structural analysis. No market context.")
-                        _render_strategy_cards(strategies_A, " [A]", tw=tier_warnings_A)
+                    # ── Render all engines (Compare Mode) ─────────────────────
+                    st.markdown("#### 🅰️ Engine A — Wall Gravity")
+                    st.caption("Pure structural analysis. No market context.")
+                    _render_strategy_cards(strategies_A, " [A]", tw=tier_warnings_A)
 
-                        st.markdown("---")
-                        st.markdown("#### 🅱️ Engine B — Contextual Alpha")
-                        st.caption(f"Sentiment-adjusted. Factor: {strategies_B.get('sentiment_factor', '?')}x ({strategies_B.get('sentiment_label', '?')})")
-                        _render_strategy_cards(strategies_B, " [B]", tw=tier_warnings_B)
+                    st.markdown("---")
+                    st.markdown("#### 🅱️ Engine B — Contextual Alpha")
+                    st.caption(f"Sentiment-adjusted. Factor: {strategies_B.get('sentiment_factor', '?')}x ({strategies_B.get('sentiment_label', '?')})")
+                    _render_strategy_cards(strategies_B, " [B]", tw=tier_warnings_B)
 
-                        if engine_c_available and strategies_C:
-                            st.markdown("---")
-                            st.markdown("#### 🅲️ Engine C — Fibonacci Confirmation")
-                            st.caption(f"Fibonacci & Wall Confirmed. Range: {strategies_C.get('intraday_range', 0):,.0f} pts ({fib_range_pct:.1f}%)")
-                            _render_strategy_cards(strategies_C, " [C]", tw=tier_warnings_C)
+                    st.markdown("---")
+                    st.markdown("#### 🅲️ Engine C — Fibonacci Confirmation")
+                    if engine_c_available and strategies_C:
+                        st.caption(f"Fibonacci & Wall Confirmed. Range: {strategies_C.get('intraday_range', 0):,.0f} pts ({fib_range_pct:.1f}%)")
+                        _render_strategy_cards(strategies_C, " [C]", tw=tier_warnings_C)
                     else:
-                        engine_lbl = strategies.get('engine_label', 'Wall Gravity')
-                        st.caption(f"🔧 Active Engine: **{engine_lbl}**")
-                        _render_strategy_cards(strategies, tw=tier_warnings)
+                        st.warning(f"⚠️ Engine C is currently inactive. Intraday range must be at least 2.0% to calculate reliable Fibonacci levels (current: {fib_range_pct:.2f}%).")
 
                     # Display Walls and Deltas
                     st.markdown("### 🧱 Orderbook Wall & Delta Signals")
