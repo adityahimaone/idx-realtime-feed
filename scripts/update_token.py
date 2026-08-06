@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 def main():
-    env_path = Path("/Users/adityahimawan/Development/idx-realtime-feed/.env")
+    env_path = Path(__file__).resolve().parent.parent / ".env"
     if not env_path.exists():
         print(f"❌ .env file not found at {env_path}")
         return
