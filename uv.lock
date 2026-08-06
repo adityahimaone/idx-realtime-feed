@@ -423,7 +423,7 @@ wheels = [
 ]
 
 [[package]]
-name = "idx-realtime-feed"
+name = "stockpick-idx"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

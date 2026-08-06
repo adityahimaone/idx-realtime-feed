@@ -65,7 +65,7 @@ def _build_pivot_chart(result: dict) -> go.Figure:
     return fig
 
 
-def render_tab10(scored_list):
+def render_elliott_wave_view(scored_list):
     """Render Tab 10: Elliott Wave — 5-Wave Impulse + Fibonacci + A-B-C."""
     st.markdown("### 🌊 Elliott Wave — Impulse + Fibonacci Targets")
     st.caption(

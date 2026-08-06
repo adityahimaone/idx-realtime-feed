@@ -13,29 +13,49 @@ HORIZON_WEIGHTS = {
 def compute_mega_score(signals: dict, horizon: str) -> dict:
     weights = HORIZON_WEIGHTS.get(horizon, HORIZON_WEIGHTS["scalping"])
     total, used_weight, breakdown = 0.0, 0.0, {}
-    
-    def to_float(v) -> float:
+    available, defaulted = {}, []
+
+    def to_float(v):
+        """Return float or None when the signal is genuinely unavailable."""
         if v is None:
-            return 50.0
+            return None
         if isinstance(v, (list, tuple)):
             if len(v) > 0:
                 return to_float(v[0])
-            return 50.0
+            return None
         try:
             return float(v)
         except (ValueError, TypeError):
-            return 50.0
+            return None
 
     for key, w in weights.items():
-        val = to_float(signals.get(key, 50.0))
+        val = to_float(signals.get(key))
+        if val is None:
+            available[key] = False
+            defaulted.append(key)
+            val = 50.0
+        else:
+            available[key] = True
         breakdown[key] = val
         total += val * float(w)
         used_weight += float(w)
     score = round(total / used_weight, 1) if used_weight > 0 else 50.0
+
+    present_weight = sum(float(w) for key, w in weights.items() if available.get(key))
+    total_weight = sum(float(w) for w in weights.values())
+    confidence = round(present_weight / total_weight, 3) if total_weight > 0 else 0.0
 
     if score >= 85:   tier = "🟢 SANGAT DIREKOMENDASIKAN"
     elif score >= 70: tier = "🔵 DIREKOMENDASIKAN"
     elif score >= 50: tier = "🟡 NETRAL / WATCHLIST"
     else:             tier = "🔴 HINDARI"
 
-    return {"score": score, "tier": tier, "breakdown": breakdown, "horizon": horizon}
+    return {
+        "score": score,
+        "tier": tier,
+        "breakdown": breakdown,
+        "horizon": horizon,
+        "available": available,
+        "defaulted": defaulted,
+        "confidence": confidence,
+    }

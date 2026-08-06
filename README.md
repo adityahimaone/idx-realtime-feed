@@ -1,6 +1,6 @@
-# 🔍 IDX Intraday Multi-Source Screener [IRW]
+# 📈 StockPick IDX
 
-A web dashboard and daemon sync engine built with Python and Streamlit to monitor, score, and analyze Indonesian Stock Exchange (IDX) tickers in near-realtime using orderbooks and momentum filters.
+A web dashboard and daemon sync engine built with Python and Streamlit to monitor, score, and analyze Indonesian Stock Exchange (IDX) tickers in near-realtime using orderbooks and momentum filters. **StockPick IDX** consolidates every signal into a single **Mega Score + Tier** verdict on the landing **Pick of the Day** tab.
 
 ---
 
@@ -9,22 +9,13 @@ A web dashboard and daemon sync engine built with Python and Streamlit to monito
 The primary frontend interface of the application. It visualizes live feeds, aggregates scores, and provides interactive deep orderbook analysis and trading calculator tools.
 
 ### 🌟 UI Key Features
-1. **API Status Board**: Located at the top of the interface. Displays dynamic pulses (green/yellow) showing live connectivity stats for Google Sheets, Yahoo Finance, IDX, and Stockbit. Displays **🔴 LIVE** during market trading hours and switch to **⏸️ CLOSED** after hours.
-2. **Tab 1: Live Feed / Watchlist**: Displays active tickers and real-time pricing retrieved from the Google Sheets Staging database.
-3. **Tab 2: Recommendations**: Highlights top candidates marked with `STRONG BUY` signals, suggesting stop losses, targets, and risk/reward setups.
-4. **Tab 3: General Screener Board**: Health ranking list of all active stocks sorted by their Intraday Health Score.
-5. **Tab 4: Trending**: Displays trending tickers in the market.
-6. **Tab 5: BSJP Setup**: Big Spurt Jump Play (BSJP) setups.
-7. **Tab 6: Minervini VCP**: Screen stocks matching Mark Minervini's volatility contraction pattern.
-8. **Tab 7: Deep Stock Analysis (Exodus API)**: 
-   - Real-time bid/ask queue details direct from Exodus API.
-   - Detects bid/ask walls and tracks order volume delta.
-   - Visualizes **Grounded 3-Tier Execution Strategies**.
-   - Proactively shows warnings if orderbook entry prices are distorted by ARA price ceilings.
-   - Cross-links to the Portfolio tab for active positions, displaying current live P/L.
-9. **💼 Live Portfolio Tracker & DCA Calculator**:
-   - Track active holdings, invested value, current value, and profit/loss in real-time.
-   - **Average Down Calculator**: Simulate adding lots to an existing position. Automatically computes the weighted average buy price, new breakeven distance, and ticker risk concentration. Warns when a single ticker represents >25% of the total portfolio value. Apply average down directly to update the database with a single click.
+1. **Brand Header + API Status Board**: New app header (gradient brand tile, title, market tag) sits above a live status board with per-source pulse dots — green connected, amber degraded/standby, red hard-down for Google Sheets / Exodus API — plus the **🔴 LIVE** / **⏸️ CLOSED** market badge and a live WIB clock.
+2. **🏆 Pick of the Day (landing page)**: The unified Mega Score + Tier verdict for the whole watchlist. Navigation is a lazy `st.pills` switcher — only the selected page renders and fetches, so opening a page is what triggers its network work. The Pick page builds the memoized Mega Score bundles on open (per fetch fingerprint, with a **🔄 Hitung Ulang** override). Horizon selector (Scalping / Swing-BSJP / Long Term) is persisted in session state. Each candidate expands to show 3-tier entries (`calculate_strategies`), SL/TP, position size at 1% portfolio risk, a one-line "why" (top-2 breakdown contributors), and a signal-availability confidence badge. Filters narrow to BSJP / Minervini-PASSED / Pre-ARA / Trending candidates; a card view is available for mobile.
+3. **📋 Watchlist + Portfolio**: Merges the live feed (active tickers + Stockbit overrides), the custom watchlist, and the portfolio tracker + DCA calculator into Watchlist / Holdings / DCA sections.
+4. **🔍 Deep Dive (Exodus API)**: Real-time bid/ask queue details, wall detection, delta tracking, **Grounded 3-Tier Execution Strategies**, ARA-aware warnings, and live P/L cross-links — plus the **🌊 Elliott Wave** analysis folded in below as an expander. **Engine D — Trade Book Momentum** pulls the public daily trade-book chart from `exodus.stockbit.com` (per-minute cumulative buy/sell lots & values, net flow, big-money series) and re-calibrates the Aggressive / Moderate / Low Risk tiers: big-money sell ≥55% disables Aggressive and widens stops (capped cumulative SL widening ≤25%), big-money accumulation tightens them, and sell-dominant books flag caution. The Deep Dive shows a **single verdict** — Engine D when the trade book is available, otherwise Engine A — while Engine B (sentiment) and Engine C (Fibonacci) render as confirmation badges. Trade-book VWAP feeds Engine B's average-price input, and the live score consumes the Exodus imbalance ratio plus a trade-flow slot when the profile is present.
+5. **📊 General Screener**: Health ranking of active stocks by Intraday Health Score, with scalping / swing / long-term sub-tables.
+6. **📰 News Signals**: Restored multi-source news pipeline (Stockbit, CNBC, Kontan, Antara, Bisnis Indonesia, IDX Disclosure) with **auto-fetch on open** — because pages render lazily, clicking the News page immediately triggers a full multi-source sync (manual **Fetch All Sources** and auto-refresh still available). Includes macro-narrative detection, ticker impact tables, and per-ticker sentiment.
+7. **📅 Corporate Calendar**: thin secondary tab.
 
 ### 🚀 How to Run, Stop, and Restart the Dashboard:
 
@@ -69,28 +60,104 @@ Key configuration parameters:
 ### 3. Update Token Manually
 If your Bearer token expires or the automated browser login is blocked, you can use our manual helper script:
 ```bash
-python update_token.py
+python scripts/update_token.py
 ```
 Paste your fresh bearer token extracted from the browser's developer network tools and press **Enter** to instantly update the `.env` configuration.
+
+### 4. Sheet Setup & Diagnostics (consolidated)
+All legacy root-level `setup_*.py` / `check_*.py` scripts were consolidated into two canonical tools:
+
+```bash
+# Google Sheets setup (Dashboard [IRW] formulas / computed / watchlists)
+uv run python scripts/setup_sheets.py --full
+uv run python scripts/setup_sheets.py --computed
+uv run python scripts/setup_sheets.py --watchlists
+
+# One-time migration: replace =GOOGLEFINANCE(...) cells with the last cached value
+uv run python scripts/setup_sheets.py --deformula --sheet-id <id> --worksheet "All Tickers"
+
+# Diagnostics
+uv run python scripts/diagnostics.py --dashboard
+uv run python scripts/diagnostics.py --irw
+uv run python scripts/diagnostics.py --sheets
+uv run python scripts/diagnostics.py --staging
+```
+
+### 5. Freshness Engine (multi-source)
+`data/fetchers.py::pick_freshest_source` (async) compares **Stockbit**, **IDX
+endpoint**, **Google Sheets**, and **yfinance** quotes and picks the freshest
+winner:
+
+- Freshness thresholds: Stockbit 2.0 min, IDX 5.0 min, GSheet/yfinance 10.0 min.
+- Tie-break within a 5s window by priority: stockbit > idx > gsheet > yfinance.
+- Stockbit is a guarded 4th source: 60s TTL cache per symbol + a rolling budget
+  of 8 fetches per 60s window so the ~40 req/5-min token limit is never hit.
+- `services/auth_service.py::get_cached_token()` returns env/cache tokens only —
+  never triggers an Obscura browser login (safe for the Streamlit event loop).
 
 ---
 
 ## 📊 Formulations & Core Logic
 
 ### 1. Intraday Health Score (`compute_intraday_score`)
-Calculates a stock's health on a `0–100` scale. The score is computed as a weighted average of:
-$$\text{Score} = (\text{Volume Score} \times 0.25) + (\text{Net Foreign Score} \times 0.25) + (\text{Price Change Score} \times 0.20) + (\text{Spread Score} \times 0.15) + (\text{Historical Score} \times 0.15)$$
+Calculates a stock's health on a `0–100` scale (weights sum to 1.0):
+$$\text{Score} = \text{Flow} \times 0.25 + \text{Orderbook} \times 0.20 + \text{Trend} \times 0.20 + \text{Momentum} \times 0.15 + \text{Historical} \times 0.10 + \text{Risk} \times 0.10$$
 
-- **Volume Score**: Compares live trading volume against historical average volume (Vol Spike):
-  - $\text{Spike} \geq 3.0 \rightarrow 100$
-  - $\text{Spike} \geq 2.0 \rightarrow 80$
-  - $\text{Spike} \geq 1.5 \rightarrow 60$
-  - $\text{Spike} \geq 1.0 \rightarrow 40$
-  - $\text{Otherwise} \rightarrow 20$
-- **Net Foreign Score**: Ratio of foreign buy volume vs foreign sell volume.
-- **Price Change Score**: Score given depending on intraday price growth.
-- **Spread Score**: Calculated using position in the day's high-low range:
-  $$\text{Spread Score} = 40 + \left( \frac{\text{Last} - \text{Low}}{\text{High} - \text{Low}} \right) \times 60$$
+- **Flow (0.25)**: volume spike tiers (0.6) + foreign buy/sell ratio tiers (0.4).
+- **Orderbook (0.20)**: `Total Bid Lot` / `Total Ask Lot` from the sync-daemon-fed sheet: ≥2.5→100, ≥1.5→75, ≥0.8→50, else 20.
+- **Trend (0.20)**: price vs MA20/MA50/MA200 stack (100 / 70 / 40 / 20), +10 bonus (capped at 100) when `-10 ≤ Dist to 52W High ≤ 0`.
+- **Momentum (0.15)**: intraday change% tiers, ×0.75 if RSI ≥ 70, ×0.5 if RSI ≥ 75.
+- **Historical (0.10)**: `Score v2` baseline (kept until the future column migration).
+- **Risk (0.10)**: neutral 50.
+
+Hard caps apply after weighting (most restrictive wins, each adds a warning):
+`0 < ARA_Dist_Pct ≤ 2` → cap 55 · `UMA` set → cap 40 · `Corp Action` set → cap 60.
+
+**Live-data overrides** (optional, backward-compatible — bots and other callers
+that omit them keep the exact legacy weights/behavior):
+- `imbalance_ratio` replaces the sheet-derived bid/ask ratio in the orderbook slot.
+- `tradebook` (a `tradebook_profile` dict) splits the orderbook slot into
+  orderbook 0.10 + **trade_flow 0.10**, where trade_flow = base(accumulating 80 /
+  neutral 55 / distributing 30) + 20×net-positive-ratio ±10 momentum, capped at 40
+  when big-money selling is dominant (≥55%).
+
+All thresholds (big-money dominance, book imbalance, SL widen/tighten, TP scale,
+ARA proximity 2.0%, sanity floor) live in `core/config.py` as one source of truth.
+
+---
+
+### 1b. Deep Dive verdict — Engine D / Engine A
+
+The Deep Dive renders **one verdict row of 3 tier cards** (Aggressive /
+Moderate / Low Risk):
+- Trade book available → **Engine D** (`strategies_A` re-calibrated by
+  `adjust_tiers_with_tradebook`); fallback → **Engine A** with the caption
+  "Trade book tidak tersedia".
+- Engine B (sentiment factor) and Engine C (Fibonacci mode/range) are
+  confirmation badges, not duplicate card sets.
+- Position sizing uses the shared `position_size_lots` helper (risk-first,
+  capped by tier allocation).
+
+> **Catatan audit #10 (sengaja dibiarkan):** Engine C tetap gated pada
+> `intraday range ≥ 2.0%` sebelum `grounded_three_tier_C` dihitung. Ini bukan
+> bug — Fib retracement pada range < 2% tidak reliabel, dan gate ini sengaja
+> dipertahankan. Hanya dicatat di sini, tidak diubah.
+
+---
+
+### 6. Buy Verdict Consolidation (schema-stable)
+**Mega Score + Tier** is the only buy verdict. The redundant verdict columns in
+the sheet (`Score`, `Trend`, `Signal`, `Final_Signal`, `Rank`, `Breakout`,
+`Reversal`, `Range_Signal`, `RSI Signal`, `Volume_Flag`/`Vol_Flag`, `Gap_Flag`)
+are no longer read as verdicts anywhere — raw inputs (`RSI14`, `Vol_Ratio`,
+`ARA_Dist_Pct`, MA stack, orderbook lots) remain supporting evidence.
+
+A future one-shot migration will retire those columns. It is **not executed
+yet** because it requires a coordinated change across three places at once:
+the manifest, the sheet header, and the sync-daemon write path (see
+`manifest/feature_manifest.json` → `future_migrations`). Until then the sheet
+schema, manifest, integrity guard, and sync writes stay byte-for-byte
+unchanged.
 
 ---
 

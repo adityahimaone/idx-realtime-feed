@@ -599,3 +599,48 @@ def build_per_ticker_sentiment(
 
     return sorted(rows, key=lambda x: x["_combined"], reverse=True)
 
+
+
+# ─── Aggregated source fetching (used by signal_bundle / Pick of the Day) ────
+
+SOURCE_LABEL = {
+    "stockbit": "📡 Stockbit",
+    "cnbc_indonesia": "📰 CNBC Indonesia",
+    "kontan": "📋 Kontan",
+    "antara_ekonomi": "🌐 Antara Ekonomi",
+    "bisnis_indonesia": "📉 Bisnis Indonesia",
+    "idx_disclosure": "🏛️ IDX Disclosure",
+}
+
+SOURCE_SORT = {
+    "stockbit": 1, "cnbc_indonesia": 2, "antara_ekonomi": 3,
+    "kontan": 4, "bisnis_indonesia": 5, "idx_disclosure": 6,
+}
+# Sources with no public RSS/feed — shown as unavailable in the News tab UI.
+DEAD_SOURCES = {"bisnis_indonesia", "idx_disclosure"}
+
+SOURCES = [
+    ("stockbit", fetch_stockbit_news_headlines),
+    ("cnbc_indonesia", fetch_cnbc_rss),
+    ("antara_ekonomi", fetch_antara_rss),
+    ("kontan", fetch_kontan_scrape),
+    ("bisnis_indonesia", fetch_bisnis_scrape),
+    ("idx_disclosure", fetch_idx_disclosure_scrape),
+]
+
+
+def fetch_all_news() -> dict:
+    """Fetch all news sources, returning {source_tag: [articles]}.
+
+    Never raises — per-source failures are logged and returned as empty lists.
+    """
+    from core.logger import logger
+
+    results: dict = {}
+    for tag, fetcher_fn in SOURCES:
+        try:
+            results[tag] = fetcher_fn() or []
+        except Exception as exc:
+            logger.warning(f"news source {tag} fetch error: {exc}")
+            results[tag] = []
+    return results

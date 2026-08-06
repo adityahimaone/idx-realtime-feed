@@ -47,5 +47,21 @@ class Config:
     # --- Local cache / history ---
     SQLITE_PATH: str = os.getenv("SQLITE_PATH", "data/realtime_history.db")
 
+    # --- Engine D / Trade Book thresholds (centralized audit #8) ---
+    BIG_MONEY_DOMINANCE_PCT: float = 55.0    # big-money sell/buy ≥ this → dominant
+    BIG_MONEY_TREND_RATIO: float = 0.05      # ±5% of total value = accumulating/distributing
+    BOOK_IMBALANCE_SELL: float = 0.85        # imbalance below this = sell-dominant book
+    BOOK_IMBALANCE_BUY: float = 1.3          # imbalance at/above this = buy-dominant book
+    NET_FLOW_SELL_PCT: float = 50.0          # net flow + big-money sell caution floor
+    SL_WIDEN_BIG_MONEY: float = 0.15         # SL widened by 15% on big-money distribution
+    SL_WIDEN_THIN_BOOK: float = 0.10         # SL widened by 10% on sell-dominant book
+    SL_TIGHTEN_MID_LOW: float = 0.12         # SL tightened by 12% (Moderate / Low Risk)
+    SL_TIGHTEN_AGG: float = 0.10             # SL tightened by 10% (Aggressive)
+    TP_SCALE_DOWN: float = 0.92              # TP pulled 8% closer on net-flow negative
+    MAX_SL_WIDEN_PCT: float = 0.25           # cumulative SL widen cap across rules
+    ARA_PROXIMITY_WARNING_PCT: float = 2.0   # near-ARA window for score cap / sanity warning
+    SANITY_FLOOR_FALLBACK_PCT: float = 0.08  # sanity floor when ATR % column is empty
+    SANITY_ATR_MULTIPLIER: float = 1.5       # sanity floor = current * (1 − ATR% × 1.5)
+
 
 config = Config()

@@ -58,6 +58,19 @@ class AuthService:
         self._last_refresh_attempt = time.time()
         return await self.refresh_token()
 
+    def get_cached_token(self) -> str:
+        """Return a token from env or cache only — never triggers an Obscura
+        browser login and never blocks. Used by sync/async callers that must not
+        hang (e.g. the Streamlit freshness engine).
+        """
+        env_token = config.STOCKBIT_BEARER_TOKEN
+        if env_token and not self._is_jwt_expired(env_token):
+            return env_token
+        cached = self._read_cache()
+        if cached and not self._is_expired(cached) and not self._is_jwt_expired(cached["token"]):
+            return cached["token"]
+        return ""
+
     async def refresh_token(self, force: bool = False) -> str:
         """Login ulang via Obscura, simpan token baru ke cache.
 

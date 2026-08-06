@@ -11,6 +11,7 @@ from bot.data_pipeline import get_watchlist_tickers, scan_all, now_wib_str
 from data.fetchers import safe_float
 from data.scoring import compute_action_recommendation, calculate_strategies
 from bot.telegram import send_telegram
+from repositories.sqlite_repository import sqlite_repository
 
 SIGNAL_EMOJI = {
     "STRONG BUY": "🟢",
@@ -26,6 +27,19 @@ async def run_and_send():
         return
 
     results = await scan_all(tickers[:40])
+
+    # Log scan history for the track-record / backtest feed (existing columns only)
+    for r in results:
+        try:
+            sqlite_repository.save_scan_history(
+                r["ticker"],
+                r["live"].get("last", 0),
+                r["score"],
+                r["signal"],
+                r["live"].get("source", "unknown"),
+            )
+        except Exception as exc:
+            print(f"save_scan_history error for {r['ticker']}: {exc}")
 
     # Filter strong buy
     strong = [r for r in results if r["score"] >= 75]

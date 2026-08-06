@@ -1,7 +1,7 @@
 [project]
-name = "idx-realtime-feed"
+name = "stockpick-idx"
 version = "0.1.0"
-description = "Near-realtime IDX price & orderbook feed for watchlist, syncing to Market Alpha Dashboard"
+description = "StockPick IDX — unified Mega Score stock picking dashboard for the Indonesian Stock Exchange"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",

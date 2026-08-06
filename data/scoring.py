@@ -1,8 +1,32 @@
 import math
+from core.config import config
 from data.fetchers import safe_float
 
 
-def compute_intraday_score(data, hist_row) -> dict:
+def compute_intraday_score(data, hist_row, imbalance_ratio=None, tradebook=None) -> dict:
+    """Unified intraday score (0-100).
+
+    Weights sum to 1.0:
+      flow      0.25  (vol tiers 0.6 + foreign-ratio tiers 0.4)
+      orderbook 0.20  (Total Bid Lot / Total Ask Lot)
+      trend     0.20  (price vs MA20/MA50/MA200 stack, 52W-high proximity bonus)
+      momentum  0.15  (change% tiers, RSI discount)
+      hist      0.10  (Score v2 baseline, kept until the future column migration)
+      risk      0.10  (neutral 50)
+
+    Optional live overrides (backward-compatible — when both are None the
+    weights and behaviour are identical to the legacy call):
+      imbalance_ratio  replaces the sheet-derived bid/ask ratio.
+      tradebook        (tradebook_profile dict) splits the orderbook slot into
+                       orderbook 0.10 + trade_flow 0.10, where trade_flow is
+                       derived from big-money trend / net-flow momentum and is
+                       capped at 40 when big-money selling is dominant.
+
+    Hard caps (most restrictive wins, each adds a warning):
+      0 < ARA_Dist_Pct <= ARA_PROXIMITY_WARNING_PCT -> cap 55
+      UMA set               -> cap 40
+      Corp Action set       -> cap 60
+    """
     vol_avg = safe_float(hist_row.get("Vol_Avg", 0))
     live_vol = safe_float(data.get("volume", 0))
     vol_spike = (live_vol / vol_avg) if vol_avg > 0 else 1.0
@@ -18,7 +42,6 @@ def compute_intraday_score(data, hist_row) -> dict:
     else:
         vol_score = 20
 
-    # --- GANTI hardcoded 60/60 dengan proxy dari data yang sudah ada ---
     fb = safe_float(data.get("foreign_buy", 0))
     fs = safe_float(data.get("foreign_sell", 0))
     net_foreign_ratio = fb / max(fs, 1.0)
@@ -33,14 +56,69 @@ def compute_intraday_score(data, hist_row) -> dict:
     else:
         imbalance_score = 30
 
-    high = safe_float(data.get("high", 0))
-    low  = safe_float(data.get("low", 0))
+    flow_score = round(vol_score * 0.6 + imbalance_score * 0.4, 1)
+
     last = safe_float(data.get("last", 0))
-    if high > low:
-        price_pos = (last - low) / (high - low)
-        spread_score = round(40 + price_pos * 60, 1)   # posisi di range hari ini sbg proxy buying pressure
+
+    # ── Orderbook imbalance (sheet columns the sync daemon already writes) ──
+    total_bid = safe_float(hist_row.get("Total Bid Lot", 0)) or safe_float(data.get("total_bid_lot", 0))
+    total_ask = safe_float(hist_row.get("Total Ask Lot", 0)) or safe_float(data.get("total_ask_lot", 0))
+    ob_ratio = (total_bid / total_ask) if total_ask > 0 else 0.0
+    if imbalance_ratio is not None:
+        ob_ratio = safe_float(imbalance_ratio)
+    if ob_ratio >= 2.5:
+        orderbook_score = 100
+    elif ob_ratio >= 1.5:
+        orderbook_score = 75
+    elif ob_ratio >= 0.8:
+        orderbook_score = 50
     else:
-        spread_score = 60   # fallback kalau data range tidak tersedia
+        orderbook_score = 20
+
+    # ── Trade-flow slot (only when a tradebook profile is supplied) ──
+    trade_flow_score = None
+    if tradebook:
+        bm_trend = tradebook.get("big_money_trend", "neutral")
+        base = {"accumulating": 80.0, "neutral": 55.0, "distributing": 30.0}.get(
+            bm_trend, 55.0
+        )
+        net_pos = safe_float(tradebook.get("net_positive_ratio", 0.0))
+        momentum = tradebook.get("momentum", "neutral")
+        trade_flow_score = base + 20.0 * net_pos
+        if momentum == "accelerating":
+            trade_flow_score += 10.0
+        elif momentum == "decelerating":
+            trade_flow_score -= 10.0
+        if safe_float(tradebook.get("big_money_sell_pct", 0.0)) >= config.BIG_MONEY_DOMINANCE_PCT:
+            trade_flow_score = min(trade_flow_score, 40.0)
+        trade_flow_score = max(0.0, min(100.0, trade_flow_score))
+
+    # ── Trend alignment vs MA stack ──
+    ma20 = safe_float(hist_row.get("MA20", 0))
+    ma50 = safe_float(hist_row.get("MA50", 0))
+    ma200 = safe_float(hist_row.get("MA200", 0))
+    if ma20 <= 0:
+        trend_score = 20
+    elif last > ma20:
+        if ma50 <= 0:
+            trend_score = 40
+        elif ma20 > ma50:
+            if ma200 <= 0:
+                trend_score = 70
+            elif ma50 > ma200:
+                trend_score = 100
+            else:
+                trend_score = 70
+        else:
+            trend_score = 40
+    else:
+        trend_score = 20
+
+    dist_raw = hist_row.get("Dist to 52W High")
+    if dist_raw not in (None, ""):
+        dist_52w = safe_float(dist_raw)
+        if -10 <= dist_52w <= 0:
+            trend_score = min(100, trend_score + 10)
 
     prev = safe_float(data.get("prev_close", 0))
     chg = ((last - prev) / prev * 100) if prev > 0 else 0.0
@@ -56,15 +134,62 @@ def compute_intraday_score(data, hist_row) -> dict:
     else:
         price_score = 20
 
-    hist_score = safe_float(hist_row.get("Score v2", 50))
+    # ── Momentum with RSI discount ──
+    rsi = safe_float(hist_row.get("RSI14", 0))
+    if rsi >= 75:
+        price_score = round(price_score * 0.5)
+    elif rsi >= 70:
+        price_score = round(price_score * 0.75)
+    momentum_score = price_score
 
-    total = int(round(
-        vol_score * 0.25 +
-        imbalance_score * 0.25 +
-        price_score * 0.20 +
-        spread_score * 0.15 +
-        hist_score * 0.15
-    ))
+    hist_score = safe_float(hist_row.get("Score v2", 50))
+    risk_score = 50.0  # neutral risk slot
+
+    if trade_flow_score is not None:
+        total = round(
+            flow_score * 0.25 +
+            orderbook_score * 0.10 +
+            trade_flow_score * 0.10 +
+            trend_score * 0.20 +
+            momentum_score * 0.15 +
+            hist_score * 0.10 +
+            risk_score * 0.10,
+            1,
+        )
+    else:
+        total = round(
+            flow_score * 0.25 +
+            orderbook_score * 0.20 +
+            trend_score * 0.20 +
+            momentum_score * 0.15 +
+            hist_score * 0.10 +
+            risk_score * 0.10,
+            1,
+        )
+
+    # ── Hard caps ──
+    warnings = []
+    cap = 101
+    ara_raw = hist_row.get("ARA_Dist_Pct")
+    if ara_raw not in (None, ""):
+        ara_dist = safe_float(ara_raw)
+        if 0 < ara_dist <= config.ARA_PROXIMITY_WARNING_PCT:
+            cap = min(cap, 55)
+            warnings.append(
+                f"Near ARA (ARA_Dist_Pct ≤ {config.ARA_PROXIMITY_WARNING_PCT:.0f}%) — cap 55"
+            )
+    uma_raw = str(hist_row.get("UMA", "") or "").strip()
+    if uma_raw and uma_raw.lower() not in ("no", "none", "-", "n/a", "0"):
+        cap = min(cap, 40)
+        warnings.append("UMA flag set — cap 40")
+    corp_raw = str(hist_row.get("Corp Action", "") or "").strip()
+    if corp_raw and corp_raw.lower() not in ("no", "none", "-", "n/a", "0"):
+        cap = min(cap, 60)
+        warnings.append("Corporate Action flag set — cap 60")
+    if cap <= 100:
+        total = min(total, float(cap))
+
+    total = int(round(total))
 
     if total >= 85:
         sig, col = "STRONG BUY", "#00D4AA"
@@ -77,18 +202,29 @@ def compute_intraday_score(data, hist_row) -> dict:
     else:
         sig, col = "STRONG SELL", "#FF6B6B"
 
-    return {
+    result = {
         "score": total,
         "signal": sig,
+        "tier": sig,
         "color": col,
         "vol_spike": vol_spike,
         "change_pct": chg,
+        "warnings": warnings,
         "breakdown": {
+            "flow": flow_score,
+            "orderbook": orderbook_score,
+            "trend": trend_score,
+            "momentum": momentum_score,
+            "hist": hist_score,
+            "risk": risk_score,
             "Volume Spike": vol_score,
             "Price Intraday Change": price_score,
-            "Historical Score Weight": hist_score
+            "Historical Score Weight": hist_score,
         }
     }
+    if trade_flow_score is not None:
+        result["breakdown"]["trade_flow"] = trade_flow_score
+    return result
 
 
 def compute_action_recommendation(price, sl, tp, score, rsi):
@@ -169,6 +305,39 @@ def calculate_strategies(price: float, score: int, signal: str) -> dict:
         "Moderate":   {"entry": entry_mod, "target": tp_mod, "sl": sl_mod, "rr": rr_mod, "size": alloc_mod},
         "Low Risk":   {"entry": entry_low, "target": tp_low, "sl": sl_low, "rr": rr_low, "size": alloc_low},
     }
+
+
+def sl_tp_levels(price: float, hist_row: dict) -> dict:
+    """Stop-loss / take-profit levels (Tab 2 logic).
+
+    SL: SL_Practical, else max(MA20*0.97, price*0.93), floored at price*0.93.
+    TP: 52W High, else price*1.15, capped at price*1.15.
+    """
+    sl_prac = safe_float(hist_row.get("SL_Practical"))
+    ma20 = safe_float(hist_row.get("MA20"))
+    sl = sl_prac if sl_prac > 0 else round(max(ma20 * 0.97, price * 0.93), 2)
+    if sl >= price:
+        sl = round(price * 0.93, 2)
+    high52 = safe_float(hist_row.get("52W High"))
+    tp = round(min(high52, price * 1.15), 2) if high52 > 0 else round(price * 1.15, 2)
+    return {"sl": sl, "tp": tp}
+
+
+def position_size_lots(entry: float, sl: float, base_portfolio: float,
+                       allocation_pct: float = 0.10,
+                       risk_budget: float = 0.01) -> int:
+    """Risk-first position sizing (lifted from Tab 7).
+
+    Lots_risk = (base * risk_budget) / ((entry - sl) * 100)
+    Lots_cap  = (base * allocation_pct) / (entry * 100)
+    Lots      = min(Lots_risk, Lots_cap)
+    """
+    if entry <= 0 or base_portfolio <= 0:
+        return 0
+    risk_per_share = entry - sl
+    lots_risk = int((base_portfolio * risk_budget) / (risk_per_share * 100)) if risk_per_share > 0 else 0
+    lots_cap = int((base_portfolio * allocation_pct) / (entry * 100)) if entry > 0 else 0
+    return min(lots_risk, lots_cap) if lots_risk > 0 else lots_cap
 
 
 def minify_html(html_str: str) -> str:

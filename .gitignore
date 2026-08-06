@@ -24,3 +24,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# Backup
+data/ticker_pool_backup.csv
