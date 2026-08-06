@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-env_path = Path('/Users/adityahimawan/Development/idx-realtime-feed/.env')
+env_path = Path(__file__).resolve().parent.parent / ".env"
 content = env_path.read_text()
 
 old_id = '1wr2f6drQBqBUxikdJqSp1YVPaHF13qX0V3c7p4hkw5U'
