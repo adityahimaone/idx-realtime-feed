@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "name": "idx-realtime-feed",
+  "name": "stockpick-idx",
   "spreadsheet": {
     "sheet_id": "1WOPSU6JLoinVUexwJzbB-vpQS-4hoDp8TskP3GcKYaE",
     "sheet_name": "Realtime_Watchlist [IRW]",
@@ -86,5 +86,12 @@
   "providers": {
     "primary": "stockbit",
     "fallback": "rti"
-  }
+  },
+  "future_migrations": [
+    {
+      "id": "retire-verdict-columns",
+      "status": "planned",
+      "description": "One-shot coordinated retirement of the redundant verdict columns (Score, Trend, Signal, Final_Signal, Rank, Breakout, Reversal, Range_Signal, RSI Signal, Volume_Flag/Vol_Flag, Gap_Flag) once the Mega Score + unified tier pipeline has been live for a full cycle. Must update manifest + sheet header + sync-daemon writes together. Raw inputs (RSI14, Vol_Ratio, ARA_Dist_Pct, MA stack, orderbook lots) remain supporting evidence."
+    }
+  ]
 }

@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import asyncio
+import time
 from datetime import datetime
 import pytz
 import yfinance as yf
@@ -153,55 +155,243 @@ def fetch_idx_source(symbol: str, idx_summary_dict: dict = None) -> dict:
     except Exception as e:
         return {"source_ts": None, "error": str(e)}
 
-def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = None) -> dict:
-    gsheet_res = fetch_gsheet_source(symbol, hist_row)
-    yfinance_res = fetch_yfinance_source(symbol)
-    idx_res = fetch_idx_source(symbol, idx_summary_dict)
-    
+# ─── Freshness selection ─────────────────────────────────────────────────────
+
+SOURCE_PRIORITY = {"stockbit": 0, "idx_endpoint": 1, "gsheet": 2, "yfinance": 3}
+FRESHNESS_THRESHOLDS_MIN = {
+    "stockbit": 2.0,
+    "idx_endpoint": 5.0,
+    "gsheet": 10.0,
+    "yfinance": 10.0,
+}
+TIE_WINDOW_SEC = 5.0
+
+# Stockbit rate-limit guard: ~40 req / 5 min per token. We keep a module-level
+# TTL cache (60s per symbol) plus a rolling budget of 8 fetches per 60s window.
+STOCKBIT_CACHE_TTL = 60.0
+STOCKBIT_BUDGET = 8
+STOCKBIT_BUDGET_WINDOW = 60.0
+_stockbit_ttl_cache: dict[str, tuple[float, dict]] = {}
+_stockbit_budget = {"window_start": 0.0, "count": 0}
+
+
+def _stockbit_budget_available() -> bool:
+    now = time.time()
+    if now - _stockbit_budget["window_start"] >= STOCKBIT_BUDGET_WINDOW:
+        _stockbit_budget["window_start"] = now
+        _stockbit_budget["count"] = 0
+    return _stockbit_budget["count"] < STOCKBIT_BUDGET
+
+
+def _stockbit_budget_consume() -> None:
+    _stockbit_budget["count"] += 1
+
+
+def _stockbit_result_from_snap(snap) -> dict:
+    total_bid = sum(l.lot for l in snap.bid_levels)
+    total_ask = sum(l.lot for l in snap.ask_levels)
+    return {
+        "last": snap.last_price,
+        "open": snap.open_price or snap.last_price,
+        "high": snap.high or snap.last_price,
+        "low": snap.low or snap.last_price,
+        "volume": snap.volume,
+        "prev_close": snap.prev_close,
+        "frequency": getattr(snap, "frequency", 0.0),
+        "value": getattr(snap, "value", 0.0),
+        "foreign_buy": getattr(snap, "fbuy", 0.0),
+        "foreign_sell": getattr(snap, "fsell", 0.0),
+        "total_bid_lot": total_bid,
+        "total_ask_lot": total_ask,
+        "imbalance_ratio": total_bid / total_ask if total_ask > 0 else 1.0,
+        "source_ts": datetime.now(WIB),
+        "error": None,
+    }
+
+
+async def fetch_stockbit_quote_source(symbol: str) -> dict:
+    """Fetch a quote-source dict from Stockbit for the freshness engine.
+
+    Guarded by a 60s TTL cache per symbol and a rolling budget of 8 fetches per
+    60s window so the ~40 req/5-min token limit is never approached. Uses the
+    sync cached token (env/cache only — never triggers an Obscura browser login)
+    and falls back to the unauthenticated exodus endpoint. Stockbit exposes no
+    exchange timestamp, so source_ts is the fetch time (honest proxy).
+    """
+    now = time.time()
+    cached = _stockbit_ttl_cache.get(symbol)
+    if cached and now - cached[0] < STOCKBIT_CACHE_TTL:
+        return cached[1]
+
+    if not _stockbit_budget_available():
+        return {"source_ts": None, "error": "Stockbit fetch budget exhausted"}
+    _stockbit_budget_consume()
+
+    res = None
+    try:
+        from services.auth_service import auth_service
+        from providers.stockbit_provider import StockbitProvider
+
+        token = auth_service.get_cached_token()
+        if token:
+            provider = StockbitProvider(token)
+            try:
+                snap = await provider.fetch_orderbook(symbol)
+                if snap:
+                    res = _stockbit_result_from_snap(snap)
+            finally:
+                await provider.close()
+
+        if res is None:
+            # Unauthenticated exodus fallback (empty token skips the auth path)
+            snap = await fetch_stockbit_detail(symbol, token="")
+            if snap:
+                res = _stockbit_result_from_snap(snap)
+    except Exception as exc:
+        logger.error(f"fetch_stockbit_quote_source failed for {symbol}: {exc}")
+
+    if res is None:
+        res = {"source_ts": None, "error": "Stockbit fetch failed"}
+    _stockbit_ttl_cache[symbol] = (now, res)
+    return res
+
+
+def fetch_stockbit_tradebook(symbol: str, date: str | None = None) -> dict | None:
+    """Fetch the daily trade-book chart from the public Exodus endpoint.
+
+    GET https://exodus.stockbit.com/order-trade/trade-book/chart
+        ?symbol=ARCI&time_interval=1m&date=YYYY-MM-DD
+
+    The payload carries per-minute cumulative buy/sell lots & values, prices,
+    net values, a big-money net series, and a `book_total` summary. Returns the
+    raw JSON dict (or None). Requires the Stockbit Bearer token — the endpoint
+    returns 401 without it. `date` defaults to today WIB (YYYY-MM-DD).
+    """
+    from datetime import datetime
+
+    import pytz
+
+    if date is None:
+        date = datetime.now(pytz.timezone("Asia/Jakarta")).strftime("%Y-%m-%d")
+    url = "https://exodus.stockbit.com/order-trade/trade-book/chart"
+    params = {"symbol": symbol.upper(), "time_interval": "1m", "date": date}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+    }
+    try:
+        from services.auth_service import auth_service
+        token = auth_service.get_cached_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    except Exception:
+        pass
+    try:
+        r = requests_cf.get(url, params=params, headers=headers, timeout=12, impersonate="chrome")
+        if r.status_code == 200:
+            return r.json()
+        logger.warning(f"tradebook: HTTP {r.status_code} for {symbol} @ {date}")
+    except Exception as exc:
+        logger.warning(f"tradebook: request error for {symbol}: {exc}")
+    return None
+
+
+async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = None) -> dict:
+    """Compare freshness timestamps of Stockbit, IDX, GSheet, and yfinance to
+    select the best winner. Sync source fetchers run in a thread pool; Stockbit
+    goes through its own guarded async path."""
+    gsheet_res, yfinance_res, idx_res, stockbit_res = await asyncio.gather(
+        asyncio.to_thread(fetch_gsheet_source, symbol, hist_row),
+        asyncio.to_thread(fetch_yfinance_source, symbol),
+        asyncio.to_thread(fetch_idx_source, symbol, idx_summary_dict),
+        fetch_stockbit_quote_source(symbol),
+        return_exceptions=True,
+    )
+
+    def _safe(res):
+        return {} if isinstance(res, BaseException) else (res or {})
+
+    gsheet_res = _safe(gsheet_res)
+    yfinance_res = _safe(yfinance_res)
+    idx_res = _safe(idx_res)
+    stockbit_res = _safe(stockbit_res)
+
     sources = []
+
     def is_valid(res):
         return res.get("error") is None and res.get("last") is not None and res.get("last") > 0
-        
+
     if is_valid(gsheet_res):
         sources.append({"name": "gsheet", "res": gsheet_res, "ts": gsheet_res["source_ts"]})
     if is_valid(yfinance_res):
         sources.append({"name": "yfinance", "res": yfinance_res, "ts": yfinance_res["source_ts"]})
     if is_valid(idx_res):
         sources.append({"name": "idx_endpoint", "res": idx_res, "ts": idx_res["source_ts"]})
-        
+    if is_valid(stockbit_res):
+        sources.append({"name": "stockbit", "res": stockbit_res, "ts": stockbit_res["source_ts"]})
+
     if not sources:
+        # Fallback to gsheet row cache (keeps frequency/value enrichment)
+        price = safe_float(hist_row.get("Price"))
+        value = safe_float(hist_row.get("Value", 0))
+        if value <= 0:
+            value = price * safe_float(hist_row.get("Volume")) * 100
         return {
-            "last": safe_float(hist_row.get("Price")),
+            "last": price,
             "open": safe_float(hist_row.get("PriceOpen")),
             "high": safe_float(hist_row.get("High")),
             "low": safe_float(hist_row.get("Low")),
+            "volume": safe_float(hist_row.get("Volume")),
             "prev_close": safe_float(hist_row.get("ClosePrev")),
+            "frequency": safe_float(hist_row.get("Frequency", 0)),
+            "value": value,
+            "foreign_buy": 0.0,
+            "foreign_sell": 0.0,
             "source": "gsheet_fallback",
-            "report": "All sources failed"
+            "source_ts": None,
+            "report": "All sources failed, fallback to GSheets row values",
         }
-        
+
     now_wib = datetime.now(WIB)
     fresh_sources = []
     for s in sources:
         ts = s["ts"]
         age_minutes = (now_wib - ts).total_seconds() / 60 if ts else float("inf")
-        threshold = 5.0 if s["name"] == "idx_endpoint" else 25.0
+        threshold = FRESHNESS_THRESHOLDS_MIN.get(s["name"], 10.0)
         if age_minutes <= threshold:
             fresh_sources.append(s)
-            
+
     pool = fresh_sources if fresh_sources else sources
-    winner = max(pool, key=lambda x: x["ts"].timestamp() if x["ts"] else 0.0)
-    
+
+    def ts_seconds(s):
+        return s["ts"].timestamp() if s["ts"] else 0.0
+
+    best_ts = max(ts_seconds(s) for s in pool)
+    if best_ts > 0:
+        tied = [s for s in pool if abs(ts_seconds(s) - best_ts) <= TIE_WINDOW_SEC]
+        winner = min(tied, key=lambda s: SOURCE_PRIORITY.get(s["name"], 99))
+    else:
+        winner = max(pool, key=lambda s: ts_seconds(s))
+
     res = winner["res"]
+    age_str = f"{round((now_wib - winner['ts']).total_seconds() / 60, 1)}m ago" if winner["ts"] else "N/A"
     return {
-        "last": res["last"],
-        "open": res["open"],
-        "high": res["high"],
-        "low": res["low"],
-        "volume": res["volume"],
-        "prev_close": res["prev_close"],
+        "last": res.get("last", 0.0),
+        "open": res.get("open", 0.0),
+        "high": res.get("high", 0.0),
+        "low": res.get("low", 0.0),
+        "volume": res.get("volume", 0.0),
+        "prev_close": res.get("prev_close", 0.0),
+        "frequency": res.get("frequency", 0.0),
+        "value": res.get("value", 0.0),
+        "foreign_buy": res.get("foreign_buy", 0.0),
+        "foreign_sell": res.get("foreign_sell", 0.0),
         "source": winner["name"],
         "source_ts": winner["ts"],
+        "report": f"{winner['name']} ({age_str})",
     }
 
 
@@ -323,13 +513,19 @@ def _parse_orderbook_snap(symbol, payload):
         return None
 
 
-async def fetch_stockbit_detail(symbol):
-    """Fetch live orderbook snapshot from Stockbit Exodus API."""
+async def fetch_stockbit_detail(symbol, token=None):
+    """Fetch live orderbook snapshot from Stockbit Exodus API.
+
+    Pass an explicit token to skip auth lookup entirely; otherwise the cached
+    token is used (env/cache only, no Obscura browser login). Falls back to the
+    unauthenticated exodus endpoint when no token is available or auth fails.
+    """
     try:
         from services.auth_service import auth_service
         from providers.stockbit_provider import StockbitProvider
-        
-        token = await auth_service.get_token()
+
+        if token is None:
+            token = auth_service.get_cached_token()
         if token:
             provider = StockbitProvider(token)
             try:

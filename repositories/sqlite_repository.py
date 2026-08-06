@@ -198,6 +198,36 @@ class SQLiteRepository:
             ]
 
     # Scan History Persistent Methods
+    def save_scan_history_if_changed(
+        self, ticker: str, price: float, intraday_score: int, signal: str,
+        source: str, cooldown_minutes: int = 15,
+    ) -> bool:
+        """Log a scan row only when the signal changed within the cooldown window.
+
+        App reruns Streamlit scripts on every interaction, so logging on every
+        call would insert a row per ticker per rerun — unbounded DB growth and a
+        churning cache key for the track-record forward-returns computation.
+        Returns True when a row was actually inserted.
+        """
+        import datetime
+        ticker = ticker.upper().strip()
+        now = datetime.datetime.now().isoformat()
+        window = (datetime.datetime.now() - datetime.timedelta(minutes=cooldown_minutes)).isoformat()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT signal FROM scan_history WHERE ticker = ? AND captured_at >= ? "
+                "ORDER BY captured_at DESC LIMIT 1",
+                (ticker, window),
+            ).fetchone()
+            if row and row[0] == signal:
+                return False
+            conn.execute(
+                "INSERT INTO scan_history (ticker, captured_at, price, intraday_score, signal, source) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (ticker, now, price, intraday_score, signal, source),
+            )
+            return True
+
     def save_scan_history(self, ticker: str, price: float, intraday_score: int, signal: str, source: str) -> None:
         import datetime
         now = datetime.datetime.now().isoformat()
@@ -225,6 +255,35 @@ class SQLiteRepository:
             return [
                 {"price": row[0], "intraday_score": row[1], "signal": row[2], "captured_at": row[3]}
                 for row in cursor.fetchall()
+            ]
+
+    def get_scan_history_all(self, ticker: str | None = None,
+                             signal_filter: tuple[str, ...] | None = None,
+                             limit: int = 1000) -> list[dict]:
+        """Return logged scan-history rows (track-record / backtest feed).
+
+        Uses the existing scan_history table only — no schema migration.
+        """
+        sql = "SELECT ticker, captured_at, price, intraday_score, signal, source FROM scan_history"
+        params: list = []
+        conditions = []
+        if ticker:
+            conditions.append("ticker = ?")
+            params.append(ticker.upper().strip())
+        if signal_filter:
+            placeholders = ",".join("?" for _ in signal_filter)
+            conditions.append(f"signal IN ({placeholders})")
+            params.extend(signal_filter)
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        sql += " ORDER BY captured_at DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as conn:
+            cursor = conn.execute(sql, params)
+            return [
+                {"ticker": r[0], "captured_at": r[1], "price": r[2],
+                 "intraday_score": r[3], "signal": r[4], "source": r[5]}
+                for r in cursor.fetchall()
             ]
 
     # Sentiment Cache Methods

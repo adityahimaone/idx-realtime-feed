@@ -24,10 +24,12 @@ from bot.data_pipeline import get_watchlist_tickers, get_hist_row, now_wib_str
 WIB = pytz.timezone("Asia/Jakarta")
 ALERT_FILE = Path("/tmp/idx_alerts.jsonl")
 ALERT_COOLDOWN = 300  # 5 min before re-alert same ticker
+MEGA_ALERT_COOLDOWN = 1800  # 30 min before re-alert same ticker (mega)
 POLL_INTERVAL = 30    # seconds
 
 # Track sent alerts: ticker -> timestamp
 _sent = {}
+_sent_mega = {}
 
 
 def fetch_idx_batch(tickers: list[str]) -> list[dict]:
@@ -100,9 +102,6 @@ async def deep_analyze(ticker: str, price: float, prev_close: float, vol: float,
 def evaluate_candidate(ticker: str, live: dict, hist: dict) -> dict | None:
     """Return alert dict if ticker triggers, else None."""
     now_ts = time.time()
-    # Cooldown check
-    if ticker in _sent and now_ts - _sent[ticker] < ALERT_COOLDOWN:
-        return None
 
     price = safe_float(live.get("last", 0))
     prev_close = safe_float(live.get("prev_close", 0))
@@ -135,6 +134,36 @@ def evaluate_candidate(ticker: str, live: dict, hist: dict) -> dict | None:
     }
     score_res = compute_intraday_score(live_for_score, hist_for_score)
     score = score_res["score"]
+    warnings = score_res.get("warnings", [])
+
+    # Mega alert: unified score >= 85 with no hard-cap warnings (30-min cooldown)
+    if score >= 85 and not warnings:
+        if ticker in _sent_mega and now_ts - _sent_mega[ticker] < MEGA_ALERT_COOLDOWN:
+            return None
+        reasons = ["Mega Score >= 85"]
+        breakdown = score_res.get("breakdown", {}) or {}
+        top = sorted(breakdown.items(), key=lambda kv: safe_float(kv[1]), reverse=True)[:2]
+        for key, val in top:
+            reasons.append(f"{key} {safe_float(val):.0f}")
+        alert = {
+            "type": "mega",
+            "ticker": ticker,
+            "price": price,
+            "chg_pct": chg_pct,
+            "vsr": vsr,
+            "score": score,
+            "proximity": 0.0,
+            "reasons": ", ".join(reasons),
+            "timestamp": now_ts,
+            "time_str": datetime.now(WIB).strftime("%H:%M:%S"),
+            "date_str": datetime.now(WIB).strftime("%d %b"),
+        }
+        _sent_mega[ticker] = now_ts
+        return alert
+
+    # Regular alert cooldown (5 min)
+    if ticker in _sent and now_ts - _sent[ticker] < ALERT_COOLDOWN:
+        return None
 
     # ARA proximity
     ara_price = get_ara_price(prev_close)
@@ -156,6 +185,7 @@ def evaluate_candidate(ticker: str, live: dict, hist: dict) -> dict | None:
         return None
 
     alert = {
+        "type": "intraday",
         "ticker": ticker,
         "price": price,
         "chg_pct": chg_pct,
@@ -249,7 +279,10 @@ async def run():
 
                 # Mark sent
                 for a in alerts:
-                    _sent[a["ticker"]] = a["timestamp"]
+                    if a.get("type") == "mega":
+                        _sent_mega[a["ticker"]] = a["timestamp"]
+                    else:
+                        _sent[a["ticker"]] = a["timestamp"]
 
                 print(f"[{datetime.now(WIB).strftime('%H:%M:%S')}] {len(alerts)} new alerts")
 

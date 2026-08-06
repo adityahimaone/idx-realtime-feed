@@ -11,13 +11,12 @@ import pytz
 import yfinance as yf
 import plotly.graph_objects as go
 from curl_cffi import requests as requests_cf
-from ui.tabs.tab8_news_signals import render_tab8
 from ui.tabs.tab3_screener import render_tab3
-from ui.tabs.tab4_trending import render_tab4
-from ui.tabs.tab9_pre_ara import render_tab9
-from ui.tabs.tab10_elliott_wave import render_tab10
 from ui.tabs.tab7_deep_analysis import render_tab7
-from ui.tabs.tab13_twitter_watchlist import render_tab13_twitter
+from ui.tabs.tab8_news_signals import render_tab8
+from ui.tabs.tab_pick_of_the_day import render_tab_pick_of_the_day
+from ui.tabs.tab_watchlist_portfolio import render_tab_watchlist_portfolio
+from ui.components.elliott_wave_view import render_elliott_wave_view
 from ui.components.status_bar import render_status_board, render_ihsg_widget
 
 # Mitigate yfinance cache locking issues in parallel execution
@@ -45,7 +44,7 @@ WIB = pytz.timezone("Asia/Jakarta")
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="IDX Intraday Multi-Source Screener [IRW]",
+    page_title="StockPick IDX",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -393,173 +392,9 @@ def load_ticker_pool():
         return pd.DataFrame()
 
 # ============================================================================
-# MULTI-SOURCE FRESHNESS & FALLBACK ENGINE
+# MULTI-SOURCE FRESHNESS & FALLBACK ENGINE (canonical async version lives in
+# data/fetchers.py — see pick_freshest_source / fetch_stockbit_quote_source)
 # ============================================================================
-def fetch_gsheet_source(symbol: str, hist_row: dict) -> dict:
-    try:
-        raw_ts = hist_row.get("Last Update", "")
-        source_ts = None
-        if raw_ts:
-            try:
-                dt = datetime.strptime(raw_ts, "%Y-%m-%d %H:%M:%S")
-                source_ts = WIB.localize(dt)
-            except ValueError:
-                pass
-                
-        return {
-            "last": safe_float(hist_row.get("Price")),
-            "open": safe_float(hist_row.get("PriceOpen")),
-            "high": safe_float(hist_row.get("High")),
-            "low": safe_float(hist_row.get("Low")),
-            "volume": safe_float(hist_row.get("Volume")),
-            "prev_close": safe_float(hist_row.get("ClosePrev")),
-            "source_ts": source_ts,
-            "error": None
-        }
-    except Exception as e:
-        return {"source_ts": None, "error": str(e)}
-
-def fetch_yfinance_source(symbol: str) -> dict:
-    try:
-        ticker = yf.Ticker(f"{symbol}.JK")
-        info = ticker.info
-        
-        reg_ts = info.get("regularMarketTime")
-        source_ts = datetime.fromtimestamp(reg_ts, tz=pytz.utc).astimezone(WIB) if reg_ts else None
-        
-        return {
-            "last": info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose"),
-            "open": info.get("regularMarketOpen"),
-            "high": info.get("regularMarketDayHigh"),
-            "low": info.get("regularMarketDayLow"),
-            "volume": info.get("regularMarketVolume"),
-            "prev_close": info.get("regularMarketPreviousClose"),
-            "source_ts": source_ts,
-            "error": None
-        }
-    except Exception as e:
-        return {"source_ts": None, "error": str(e)}
-
-def fetch_idx_source(symbol: str, idx_summary_dict: dict = None) -> dict:
-    try:
-        item = None
-        if idx_summary_dict is not None:
-            item = idx_summary_dict.get(symbol)
-        else:
-            # Fallback to single fetch if not provided in batch
-            url = "https://www.idx.co.id/primary/TradingSummary/GetStockSummary"
-            headers = {
-                "Referer": "https://www.idx.co.id",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-            }
-            r = requests_cf.get(url, headers=headers, timeout=10, impersonate="chrome")
-            if r.status_code == 200:
-                data = r.json()
-                for x in data.get("data", []):
-                    if x.get("StockCode", "").upper().strip() == symbol:
-                        item = x
-                        break
-        
-        if not item:
-            return {"source_ts": None, "error": "Symbol not found in IDX trading summary"}
-            
-        raw_ts = item.get("Date") or item.get("LastUpdateTime", "")
-        source_ts = None
-        if raw_ts:
-            for fmt in ("%Y-%m-%dT%H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
-                try:
-                    dt = datetime.strptime(raw_ts, fmt)
-                    source_ts = WIB.localize(dt)
-                    break
-                except ValueError:
-                    continue
-                    
-        return {
-            "last": safe_float(item.get("Close")) or safe_float(item.get("Previous")),
-            "open": safe_float(item.get("OpenPrice")),
-            "high": safe_float(item.get("High")),
-            "low": safe_float(item.get("Low")),
-            "volume": safe_float(item.get("Volume")),
-            "prev_close": safe_float(item.get("Previous")),
-            "frequency": safe_float(item.get("Frequency")),
-            "value": safe_float(item.get("Value")),
-            "foreign_buy": safe_float(item.get("ForeignBuy")),
-            "foreign_sell": safe_float(item.get("ForeignSell")),
-            "source_ts": source_ts,
-            "error": None
-        }
-    except Exception as e:
-        return {"source_ts": None, "error": str(e)}
-
-def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = None) -> dict:
-    """Compare freshness timestamps of GSheet, yfinance, and IDX endpoint to select the best winner."""
-    gsheet_res = fetch_gsheet_source(symbol, hist_row)
-    yfinance_res = fetch_yfinance_source(symbol)
-    idx_res = fetch_idx_source(symbol, idx_summary_dict)
-    
-    sources = []
-    def is_valid(res):
-        return res.get("error") is None and res.get("last") is not None and res.get("last") > 0
-        
-    if is_valid(gsheet_res):
-        sources.append({"name": "gsheet", "res": gsheet_res, "ts": gsheet_res["source_ts"]})
-    if is_valid(yfinance_res):
-        sources.append({"name": "yfinance", "res": yfinance_res, "ts": yfinance_res["source_ts"]})
-    if is_valid(idx_res):
-        sources.append({"name": "idx_endpoint", "res": idx_res, "ts": idx_res["source_ts"]})
-        
-    if not sources:
-        # Fallback to gsheet row cache
-        return {
-            "last": safe_float(hist_row.get("Price")),
-            "open": safe_float(hist_row.get("PriceOpen")),
-            "high": safe_float(hist_row.get("High")),
-            "low": safe_float(hist_row.get("Low")),
-            "volume": safe_float(hist_row.get("Volume")),
-            "prev_close": safe_float(hist_row.get("ClosePrev")),
-            "frequency": safe_float(hist_row.get("Frequency", 0)),
-            "value": safe_float(hist_row.get("Value", 0)) if safe_float(hist_row.get("Value", 0)) > 0 else (safe_float(hist_row.get("Price")) * safe_float(hist_row.get("Volume")) * 100),
-            "foreign_buy": 0.0,
-            "foreign_sell": 0.0,
-            "source": "gsheet_fallback",
-            "source_ts": None,
-            "report": "All sources failed, fallback to GSheets row values"
-        }
-        
-    now_wib = datetime.now(WIB)
-    fresh_sources = []
-    
-    for s in sources:
-        ts = s["ts"]
-        if ts:
-            age_minutes = (now_wib - ts).total_seconds() / 60
-        else:
-            age_minutes = float("inf")
-            
-        threshold = 5.0 if s["name"] == "idx_endpoint" else 25.0
-        if age_minutes <= threshold:
-            fresh_sources.append(s)
-            
-    pool = fresh_sources if fresh_sources else sources
-    winner = max(pool, key=lambda x: x["ts"].timestamp() if x["ts"] else 0.0)
-    
-    res = winner["res"]
-    age_str = f"{round((now_wib - winner['ts']).total_seconds()/60, 1)}m ago" if winner["ts"] else "N/A"
-    return {
-        "last": res["last"],
-        "open": res["open"],
-        "high": res["high"],
-        "low": res["low"],
-        "volume": res["volume"],
-        "prev_close": res["prev_close"],
-        "frequency": res.get("frequency", 0.0),
-        "value": res.get("value", 0.0),
-        "foreign_buy": res.get("foreign_buy", 0.0),
-        "foreign_sell": res.get("foreign_sell", 0.0),
-        "source": winner["name"],
-        "source_ts": winner["ts"],
-        "report": f"{winner['name']} ({age_str})"
-    }
 
 async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, delay_sec: float, hist_lookup: dict = None):
     """Fetch data for multiple tickers concurrently using our freshness logic."""
@@ -599,8 +434,7 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
     
     async def fetch_single_ticker(ticker, hist_row):
         async with sem:
-            # yfinance fetching is blocking so we run it in a thread pool
-            winner_data = await asyncio.to_thread(pick_freshest_source, ticker, hist_row, idx_summary_dict)
+            winner_data = await pick_freshest_source(ticker, hist_row, idx_summary_dict)
             return ticker, winner_data
 
     # Create tasks for all tickers
@@ -628,14 +462,15 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
 # ============================================================================
 # MODULAR IMPORTS: SCORING & NARRATIVES
 # ============================================================================
-from data.scoring import compute_intraday_score
+from data.fetchers import pick_freshest_source
+from data.scoring import compute_intraday_score, minify_html
 
 
 # ============================================================================
 # MAIN INTERFACE
 # ============================================================================
-st.title("📈 IDX Intraday Multi-Source Screener [IRW]")
-render_status_board()
+# The app header (brand + status board + IHSG widget) is assembled further
+# down, once the live status flags (gsheet/yf/gf/exodus) are known.
 
 # ============================================================================
 # IHSG DATA FETCH WITH FALLBACKS
@@ -823,15 +658,40 @@ def fetch_ihsg_data() -> dict | None:
     return None
 
 
-# ============================================================================
-# IHSG LIVE CARD
-# ============================================================================
-ihsg = fetch_ihsg_data()
-render_ihsg_widget(ihsg)
+# ── APP HEADER (brand + live status board + IHSG) — renders FIRST so the
+# ── page is visible while the data pipeline below is still connecting ────
+st.markdown("""
+<div class="app-brand">
+    <div class="app-brand-left">
+        <div class="app-brand-logo">📈</div>
+        <div>
+            <div class="app-brand-title">StockPick IDX</div>
+            <div class="app-brand-sub">Realtime IDX Screener — Unified Mega Score + Tier</div>
+        </div>
+    </div>
+    <div class="app-brand-tag">IDX Composite · Jakarta</div>
+</div>
+""", unsafe_allow_html=True)
+status_ph = st.empty()
+ihsg_ph = st.empty()
+sb_active = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
+provisional_statuses = {
+    "Google Sheets":  {"active": None, "desc": "Menghubungkan ke registry…"},
+    "Yahoo Finance":  {"active": None, "desc": "Menghubungkan ke komposit…"},
+    "Google Finance": {"active": None, "desc": "Scraper standby…"},
+    "Exodus API":     {"active": sb_active,
+                       "desc": "Orderbook queue engine (Authorized)" if sb_active else "Unauthorized (Credentials missing)"},
+}
+render_status_board(provisional_statuses, container=status_ph)
+render_ihsg_widget(None, container=ihsg_ph, loading=True)
+st.write("")
+st.write("")
 
 # ============================================================================
-# DATA PIPELINE HEALTH MONITOR
+# IHSG LIVE CARD + DATA PIPELINE HEALTH (loads after the header)
 # ============================================================================
+ihsg = fetch_ihsg_data()
+
 # Load database
 ticker_df = load_ticker_pool()
 if ticker_df.empty:
@@ -841,62 +701,29 @@ if ticker_df.empty:
 # Determine real-time status dynamically based on connection flags
 # 1. Google Sheets
 gsheet_active = not ticker_df.empty
-gs_bg = "rgba(16, 185, 129, 0.08)" if gsheet_active else "rgba(239, 68, 68, 0.08)"
-gs_border = "rgba(16, 185, 129, 0.2)" if gsheet_active else "rgba(239, 68, 68, 0.2)"
-gs_dot = "#10B981" if gsheet_active else "#EF4444"
 gs_desc = "Primary registry active pool" if gsheet_active else "Registry connection error"
 
 # 2. Yahoo Finance
 yf_active = ihsg is not None and ihsg.get("source") in ("Yahoo Finance", "Yahoo Finance API")
-yf_bg = "rgba(16, 185, 129, 0.08)" if yf_active else "rgba(245, 158, 11, 0.08)"
-yf_border = "rgba(16, 185, 129, 0.2)" if yf_active else "rgba(245, 158, 11, 0.2)"
-yf_dot = "#10B981" if yf_active else "#F59E0B"
 yf_desc = f"Active Composite source ({ihsg.get('source', 'Offline') if ihsg else 'Offline'})" if yf_active else "Composite source degraded (Fallback active)"
 
 # 3. Google Finance
 gf_active = ihsg is not None and ihsg.get("source") == "Google Finance"
-gf_bg = "rgba(16, 185, 129, 0.08)" if gf_active else "rgba(100, 116, 139, 0.08)"
-gf_border = "rgba(16, 185, 129, 0.2)" if gf_active else "rgba(100, 116, 139, 0.2)"
-gf_dot = "#10B981" if gf_active else "#64748B"
 gf_desc = "Cascading scraper fallback (Active)" if gf_active else "Scraper idle (Standby)"
 
 # 4. Exodus Stockbit API
-sb_active = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
-sb_bg = "rgba(16, 185, 129, 0.08)" if sb_active else "rgba(239, 68, 68, 0.08)"
-sb_border = "rgba(16, 185, 129, 0.2)" if sb_active else "rgba(239, 68, 68, 0.2)"
-sb_dot = "#10B981" if sb_active else "#EF4444"
 sb_desc = "Orderbook queue engine (Authorized)" if sb_active else "Unauthorized (Credentials missing)"
 
-hc1, hc2, hc3, hc4 = st.columns(4)
-with hc1:
-    st.markdown(f"""
-    <div style="background: {gs_bg}; border: 1px solid {gs_border}; padding: 8px 12px; border-radius: 8px;">
-        <span style="color:{gs_dot}; font-weight:700; font-size:0.85em;">● Google Sheets</span>
-        <div style="font-size:0.75em; color:#94A3B8;">{gs_desc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-with hc2:
-    st.markdown(f"""
-    <div style="background: {yf_bg}; border: 1px solid {yf_border}; padding: 8px 12px; border-radius: 8px;">
-        <span style="color:{yf_dot}; font-weight:700; font-size:0.85em;">● Yahoo Finance</span>
-        <div style="font-size:0.75em; color:#94A3B8;">{yf_desc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-with hc3:
-    st.markdown(f"""
-    <div style="background: {gf_bg}; border: 1px solid {gf_border}; padding: 8px 12px; border-radius: 8px;">
-        <span style="color:{gf_dot}; font-weight:700; font-size:0.85em;">● Google Finance</span>
-        <div style="font-size:0.75em; color:#94A3B8;">{gf_desc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-with hc4:
-    st.markdown(f"""
-    <div style="background: {sb_bg}; border: 1px solid {sb_border}; padding: 8px 12px; border-radius: 8px;">
-        <span style="color:{sb_dot}; font-weight:700; font-size:0.85em;">● Exodus Stockbit API</span>
-        <div style="font-size:0.75em; color:#94A3B8;">{sb_desc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-st.write("")
+api_statuses = {
+    "Google Sheets":   {"active": gsheet_active, "desc": gs_desc},
+    "Yahoo Finance":   {"active": yf_active, "desc": yf_desc},
+    "Google Finance":  {"active": gf_active, "desc": gf_desc},
+    "Exodus API":      {"active": sb_active, "desc": sb_desc},
+}
+
+# Replace the provisional header cards with real data.
+render_status_board(api_statuses, container=status_ph)
+render_ihsg_widget(ihsg, container=ihsg_ph)
 
 # Single source of truth for hist_lookup (O(N) vectorized map)
 hist_lookup = ticker_df.set_index("Clean Ticker").to_dict(orient="index")
@@ -945,9 +772,6 @@ max_scan = sidebar_data["max_scan"]
 selected_sectors = sidebar_data["selected_sectors"]
 selected_ranks = sidebar_data["selected_ranks"]
 min_score = sidebar_data["min_score"]
-exclude_filters_trending = sidebar_data["exclude_filters_trending"]
-exclude_filters_bsjp = sidebar_data["exclude_filters_bsjp"]
-exclude_filters_minervini = sidebar_data["exclude_filters_minervini"]
 search_ticker = sidebar_data["search_ticker"]
 
 filtered_df = ticker_df.copy()
@@ -964,11 +788,27 @@ else:
 display_list = filtered_df["Clean Ticker"].tolist()
 cand_list = display_list[:max_scan]
 
-st.subheader(f"📊 Displaying {len(display_list)} Tickers matching filters")
 if display_list:
-    st.write(f"Refresh Target (Top {len(cand_list)}):", ", ".join(cand_list))
+    chips = "".join(
+        f'<span class="ticker-chip">{t}</span>' for t in cand_list
+    )
+    note = ""
     if len(display_list) > len(cand_list):
-        st.caption(f"Note: Only the top {len(cand_list)} tickers will be updated live when clicking 'Refresh Live Feed' to avoid API rate limits.")
+        note = (
+            '<div class="filter-summary-note">Note: Only the top '
+            f"<b>{len(cand_list)}</b> tickers will be updated live when "
+            "clicking 'Refresh Live Feed' to avoid API rate limits.</div>"
+        )
+    st.markdown(minify_html(f"""
+    <div class="filter-summary">
+        <div class="filter-summary-head">
+            <span class="filter-summary-title">📊 Displaying <b>{len(display_list)}</b> tickers matching filters</span>
+            <span class="filter-summary-pill">Refresh target: top {len(cand_list)}</span>
+        </div>
+        <div class="ticker-chips">{chips}</div>
+        {note}
+    </div>
+    """), unsafe_allow_html=True)
 else:
     st.info("No tickers match the active filters. Adjust your criteria in the sidebar.")
     st.stop()
@@ -1061,6 +901,15 @@ if st.session_state.screener_data:
         hist_row = hist_lookup.get(ticker)
         if hist_row:
             score_data = compute_intraday_score(data, hist_row)
+            try:
+                # Cooldown-deduped: only log when the signal changed, so repeated
+                # Streamlit reruns don't bloat scan_history or churn the cache key
+                # used by the Pick of the Day track-record forward returns.
+                sqlite_repository.save_scan_history_if_changed(
+                    ticker, data["last"], score_data["score"], score_data["signal"], data.get("source", "unknown")
+                )
+            except Exception as exc:
+                logger.warning(f"save_scan_history failed for {ticker}: {exc}")
             scored_list_global.append({
                 "Ticker": ticker,
                 "Company Name": hist_row.get("Company Name", ""),
@@ -1126,399 +975,172 @@ if st.session_state.portfolio:
         total_portfolio_value += live_price * lots * 100
 
 # ============================================================================
-# TABS SYSTEM SETUP
+# PICK OF THE DAY — PRE-COMPUTED MEGA SCORE (memoized on screener fingerprint)
+#
+# Streamlit reruns this script on every interaction, so a filter toggle inside
+# the Pick of the Day tab used to recompute every signal bundle. The mega rows
+# only depend on the fetched screener data, so we gate the build behind a
+# fingerprint of that data — filter reruns reuse the cached rows and stay fast.
 # ============================================================================
-tab11, tab2, tab_wl, tab_port, tab7, tab3, tab4, tab5, tab9, tab6, tab8, tab10, tab1, tab_cal, tab_tw = st.tabs([
-    "🏆 Top Picks",
-    "🎯 Intraday Buy Recommendations",
-    "⭐ Custom Watchlist",
-    "💼 Live Portfolio Tracker",
-    "🔍 Deep Stock Analysis (Exodus API)",
-    "📊 General Screener Board",
-    "🔥 Trending Stocks",
-    "🌙 BSJP Recommendations",
-    "🚀 Pre-ARA Momentum",
-    "📈 Minervini Trend",
-    "📰 News-Based Signals",
-    "🌊 Elliott Wave",
-    "📋 Active Tickers Pool",
-    "📅 Corporate Calendar",
-    "🐦 Twitter Watchlist"
-])
+from data.signal_bundle import (
+    build_bsjp_rows,
+    build_minervini_rows,
+    build_pre_ara_rows,
+    build_trending_rows,
+)
+from data.mega_score import compute_mega_score, HORIZON_WEIGHTS
 
-# ============================================================================
-# TAB: CUSTOM WATCHLIST
-# ============================================================================
-with tab_wl:
-    st.markdown("### ⭐ Custom Watchlist")
-    st.caption("Search, add, and monitor custom tickers with live/cached metrics.")
 
-    # Search and Add
-    all_tickers = sorted(ticker_df["Clean Ticker"].unique().tolist())
-    
-    col_add1, col_add2 = st.columns([3, 1])
-    with col_add1:
-        add_ticker_select = st.selectbox(
-            "Search Emiten to Add",
-            options=all_tickers,
-            key="wl_add_select",
-            help="Select ticker to add to watchlist."
-        )
-    with col_add2:
-        st.write("") # Spacer
-        st.write("") # Spacer
-        if st.button("➕ Add to Watchlist", use_container_width=True):
-            if add_ticker_select not in st.session_state.custom_watchlist:
-                sqlite_repository.add_watchlist(add_ticker_select)
-                st.session_state.custom_watchlist = sqlite_repository.get_watchlist()
-                st.toast(f"Added {add_ticker_select} to watchlist! 🚀")
-                st.rerun()
-            else:
-                st.warning(f"{add_ticker_select} is already in watchlist.")
+def _mega_fingerprint(screener_data, last_fetch, nonce) -> str:
+    """Stable signature of the fetched screener data (cheap, plain Python)."""
+    parts = [str(last_fetch), str(nonce)]
+    for ticker in sorted(screener_data):
+        d = screener_data[ticker]
+        parts.append(f"{ticker}:{d.get('last')}:{d.get('source')}:{d.get('source_ts')}")
+    return "|".join(parts)
 
-    # Watchlist Table
-    if st.session_state.custom_watchlist:
-        wl_data = []
-        
-        for ticker in st.session_state.custom_watchlist:
-            if ticker in hist_lookup:
-                hist_row = hist_lookup[ticker]
-                # Get live details if refreshed
-                if ticker in st.session_state.screener_data:
-                    raw_data = st.session_state.screener_data[ticker]
-                    price = raw_data["last"]
-                    prev_close = safe_float(hist_row.get("ClosePrev", price))
-                    change_pct = ((price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
-                    volume = raw_data.get("volume", 0)
-                else:
-                    price = safe_float(hist_row.get("Price"))
-                    change_pct = safe_float(hist_row.get("Change%"))
-                    volume = safe_float(hist_row.get("Volume"))
-                
-                wl_data.append({
-                    "Ticker": ticker,
-                    "Company Name": hist_row.get("Company Name", ""),
-                    "Sector": hist_row.get("Sector", ""),
-                    "Price": price,
-                    "Change %": change_pct,
-                    "Volume": volume,
-                    "RSI14": safe_float(hist_row.get("RSI14")),
-                    "Support": safe_float(hist_row.get("Support")),
-                    "Breakout": safe_float(hist_row.get("Breakout"))
-                })
-        
-        if wl_data:
-            wl_df = pd.DataFrame(wl_data)
-            st.dataframe(
-                wl_df,
-                column_config={
-                    "Price": st.column_config.NumberColumn("Price", format="IDR %d"),
-                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
-                    "Volume": st.column_config.NumberColumn("Volume", format="%d"),
-                    "RSI14": st.column_config.NumberColumn("RSI14", format="%.2f"),
-                    "Support": st.column_config.NumberColumn("Support", format="IDR %d"),
-                    "Breakout": st.column_config.NumberColumn("Resistance", format="IDR %d"),
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Management (Remove individual or Clear All)
-            col_rem1, col_rem2, col_rem3 = st.columns([2, 1, 1])
-            with col_rem1:
-                rem_ticker_select = st.selectbox(
-                    "Select Ticker to Remove",
-                    options=st.session_state.custom_watchlist,
-                    key="wl_rem_select"
-                )
-            with col_rem2:
-                st.write("") # Spacer
-                st.write("") # Spacer
-                if st.button("❌ Remove Selected", use_container_width=True):
-                    sqlite_repository.remove_watchlist(rem_ticker_select)
-                    st.session_state.custom_watchlist = sqlite_repository.get_watchlist()
-                    st.toast(f"Removed {rem_ticker_select} from watchlist.")
-                    st.rerun()
-            with col_rem3:
-                st.write("") # Spacer
-                st.write("") # Spacer
-                if st.button("🗑️ Clear Watchlist", use_container_width=True):
-                    sqlite_repository.clear_watchlist()
-                    st.session_state.custom_watchlist = []
-                    st.toast("Watchlist cleared.")
-                    st.rerun()
-    else:
-        st.info("Watchlist is currently empty. Use the search box above to add stocks.")
 
-# ============================================================================
-# TAB: LIVE PORTFOLIO TRACKER
-# ============================================================================
-with tab_port:
-    st.markdown("### 💼 Live Portfolio Tracker")
-    st.caption("Track your holding value, average buy price, and lots, compared against real-time feed.")
+def _build_mega_rows(scored_list) -> dict:
+    """Per-horizon Mega Score ranking. News sentiment is intentionally NOT
+    fetched here — the News tab owns the (expensive) news pipeline, so loading
+    this landing view never pays the 6-source scrape + per-ticker yfinance cost.
+    `compute_mega_score` flags the missing news signal as defaulted (50)."""
+    bsjp_data = build_bsjp_rows(scored_list)
+    minervini_data = build_minervini_rows(scored_list)
+    pre_ara_rows = build_pre_ara_rows(scored_list)
+    trending_rows = build_trending_rows(scored_list)
 
-    # Search, Buy Price, and Lot inputs
-    col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1.2, 1.2, 1])
-    with col_p1:
-        port_ticker_select = st.selectbox(
-            "Search Emiten",
-            options=all_tickers,
-            key="port_add_select",
-            help="Select ticker to add to portfolio."
-        )
-    with col_p2:
-        buy_price_input = st.number_input(
-            "Buy Price (IDR)",
-            min_value=1.0,
-            value=100.0,
-            step=10.0,
-            key="port_buy_price"
-        )
-    with col_p3:
-        lots_input = st.number_input(
-            "Lots Size",
-            min_value=1,
-            value=10,
-            step=1,
-            key="port_lots"
-        )
-    with col_p4:
-        st.write("") # Spacer
-        st.write("") # Spacer
-        if st.button("➕ Add Asset", use_container_width=True):
-            # Check and clear old entry for this ticker before adding new
-            sqlite_repository.remove_portfolio_by_ticker(port_ticker_select)
-            sqlite_repository.add_portfolio(port_ticker_select, buy_price_input, lots_input)
-            st.session_state.portfolio = sqlite_repository.get_portfolio()
-            st.toast(f"Added {port_ticker_select} to portfolio!")
-            st.rerun()
+    lookup_bsjp = {r["Ticker"]: safe_float(r["Setup Score"]) for r in bsjp_data}
+    lookup_min = {
+        r["Ticker"]: (100.0 if "PASSED" in r["Passed Template"] else safe_float(r["score_int"]) / 8 * 100)
+        for r in minervini_data
+    }
+    lookup_preara = {r["Ticker"]: safe_float(r["Pre-ARA Score"]) for r in pre_ara_rows}
+    lookup_trend = {r["Ticker"]: safe_float(r["Trending Score"]) for r in trending_rows}
 
-    # Portfolio table & computations
-    if st.session_state.portfolio:
-        port_rows = []
-        total_invested = 0.0
-        total_current_val = 0.0
-        
-        for asset in st.session_state.portfolio:
-            ticker = asset["Ticker"]
-            buy_price = asset["Buy Price"]
-            lots = asset["Lots"]
-            
-            # Fetch live price
-            live_price = buy_price
-            if ticker in hist_lookup:
-                hist_row = hist_lookup[ticker]
-                if ticker in st.session_state.screener_data:
-                    live_price = st.session_state.screener_data[ticker]["last"]
-                else:
-                    live_price = safe_float(hist_row.get("Price"), buy_price)
-            
-            invested_val = buy_price * lots * 100
-            current_val = live_price * lots * 100
-            gain_loss = current_val - invested_val
-            gain_loss_pct = (live_price - buy_price) / buy_price * 100 if buy_price > 0 else 0.0
-            
-            total_invested += invested_val
-            total_current_val += current_val
-            
-            port_rows.append({
-                "Ticker": ticker,
-                "Buy Price": buy_price,
-                "Lots": lots,
-                "Live Price": live_price,
-                "Invested Value": invested_val,
-                "Current Value": current_val,
-                "Gain / Loss": gain_loss,
-                "Gain / Loss %": gain_loss_pct
+    has_bsjp = set(lookup_bsjp)
+    has_min = {r["Ticker"] for r in minervini_data if "PASSED" in r["Passed Template"]}
+    has_ara = set(lookup_preara)
+    has_trend = set(lookup_trend)
+
+    mega_rows = {}
+    for horizon in HORIZON_WEIGHTS:
+        rows = []
+        for s in scored_list:
+            t = s["Ticker"]
+            signals = {
+                "intraday_score": safe_float(s["Intraday Score"]),
+                "hist_score": safe_float(s["hist_row_obj"].get("Score v2", 50)),
+                "bsjp_score": safe_float(lookup_bsjp.get(t, 50)),
+                "minervini_score": safe_float(lookup_min.get(t, 50)),
+                "pre_ara_score": safe_float(lookup_preara.get(t, 50)),
+                "trending_score": safe_float(lookup_trend.get(t, 50)),
+            }
+            mega = compute_mega_score(signals, horizon)
+            rows.append({
+                "Ticker": t,
+                "Company": s["Company Name"],
+                "Sector": s["Sector"],
+                "Price": s["Live Price"],
+                "Change %": s["Change %"],
+                "Vol Spike": s["Vol Spike"],
+                "Source": s["Source Used"],
+                "Signal": s["Live Signal"],
+                "color": s["color"],
+                "Mega Score": mega["score"],
+                "Tier": mega["tier"],
+                "breakdown": mega["breakdown"],
+                "available": mega["available"],
+                "defaulted": mega["defaulted"],
+                "confidence": mega["confidence"],
+                "has_bsjp": t in has_bsjp,
+                "has_minervini": t in has_min,
+                "has_pre_ara": t in has_ara,
+                "has_trending": t in has_trend,
+                "hist_row_obj": s["hist_row_obj"],
+                "raw_data_obj": s["raw_data_obj"],
             })
-            
-        total_gain_loss = total_current_val - total_invested
-        total_gain_loss_pct = total_gain_loss / total_invested * 100 if total_invested > 0 else 0.0
-        
-        # Summary widgets
-        col_s1, col_s2, col_s3 = st.columns(3)
-        col_s1.metric("Total Invested", f"Rp {total_invested:,.0f}")
-        col_s2.metric("Total Value", f"Rp {total_current_val:,.0f}")
-        
-        # Color coding metrics for gain loss
-        gl_label = f"Rp {total_gain_loss:+,.0f}"
-        gl_pct_label = f"{total_gain_loss_pct:+.2f}%"
-        col_s3.metric("Total Profit/Loss", gl_label, gl_pct_label)
-        
-        st.markdown("---")
-        
-        # Dataframe
-        port_df = pd.DataFrame(port_rows)
-        st.dataframe(
-            port_df,
-            column_config={
-                "Buy Price": st.column_config.NumberColumn("Avg Buy Price", format="IDR %d"),
-                "Lots": st.column_config.NumberColumn("Lots", format="%d"),
-                "Live Price": st.column_config.NumberColumn("Live Price", format="IDR %d"),
-                "Invested Value": st.column_config.NumberColumn("Invested Val", format="Rp %d"),
-                "Current Value": st.column_config.NumberColumn("Current Val", format="Rp %d"),
-                "Gain / Loss": st.column_config.NumberColumn("Profit / Loss", format="Rp %+d"),
-                "Gain / Loss %": st.column_config.NumberColumn("P/L %", format="%+.2f%%"),
-            },
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # Portfolio Asset management
-        col_prem1, col_prem2, col_prem3 = st.columns([2, 1, 1])
-        with col_prem1:
-            rem_asset_select = st.selectbox(
-                "Select Asset to Remove",
-                options=[a["Ticker"] for a in st.session_state.portfolio],
-                key="port_rem_select"
-            )
-        with col_prem2:
-            st.write("")
-            st.write("")
-            if st.button("❌ Remove Asset", use_container_width=True):
-                sqlite_repository.remove_portfolio_by_ticker(rem_asset_select)
-                st.session_state.portfolio = sqlite_repository.get_portfolio()
-                st.toast(f"Removed {rem_asset_select} from portfolio.")
-                st.rerun()
-        with col_prem3:
-            st.write("")
-            st.write("")
-            if st.button("🗑️ Reset Portfolio", use_container_width=True):
-                sqlite_repository.clear_portfolio()
-                st.session_state.portfolio = []
-                st.toast("Portfolio cleared.")
-                st.rerun()
+        rows.sort(key=lambda r: r["Mega Score"], reverse=True)
+        mega_rows[horizon] = rows
+    return mega_rows
 
-        # ========================================================================
-        # AVERAGE DOWN / DCA CALCULATOR (Moved inside 'if st.session_state.portfolio' block)
-        # ========================================================================
-        st.markdown("---")
-        st.markdown("### 🔄 Average Down Calculator")
-        st.caption(
-            "Simulasikan dampak average down terhadap harga rata-rata, jarak breakeven, "
-            "dan konsentrasi risiko sebelum eksekusi. Average down memperbesar eksposur "
-            "di satu saham — gunakan dengan disiplin, bukan reaksi otomatis saat posisi rugi."
-        )
 
-        dca_ticker = st.selectbox(
-            "Pilih posisi yang ingin di-average down",
-            options=[a["Ticker"] for a in st.session_state.portfolio],
-            key="dca_ticker_select"
-        )
-        asset = next(a for a in st.session_state.portfolio if a["Ticker"] == dca_ticker)
-        old_avg = asset["Buy Price"]
-        old_lots = asset["Lots"]
-        live_price = st.session_state.screener_data.get(dca_ticker, {}).get("last", old_avg)
+if "mega_fingerprint" not in st.session_state:
+    st.session_state.mega_fingerprint = None
+if "mega_recompute" not in st.session_state:
+    st.session_state.mega_recompute = 0
 
-        dca_col1, dca_col2 = st.columns(2)
-        with dca_col1:
-            dca_price_mode = st.radio(
-                "Harga beli tambahan", ["Live Price", "Custom"],
-                horizontal=True, key="dca_price_mode"
-            )
-            dca_price = live_price if dca_price_mode == "Live Price" else st.number_input(
-                "Harga custom (IDR)", min_value=1.0, value=float(live_price), step=1.0, key="dca_custom_price"
-            )
-        with dca_col2:
-            dca_lots = st.number_input("Lot tambahan", min_value=1, value=old_lots, step=1, key="dca_lots_input")
+mega_fingerprint = _mega_fingerprint(
+    st.session_state.screener_data,
+    st.session_state.last_fetch,
+    st.session_state.mega_recompute,
+)
 
-        new_lots = old_lots + dca_lots
-        new_invested = (old_avg * old_lots * 100) + (dca_price * dca_lots * 100)
-        new_avg = new_invested / (new_lots * 100)
-        breakeven_gap_pct = ((new_avg - live_price) / live_price * 100) if live_price > 0 else 0.0
 
-        # Market-value-based concentration:
-        old_position_mkt_val = (old_lots * live_price * 100)
-        new_position_mkt_val = (new_lots * dca_price * 100)
-        total_after_dca = total_portfolio_value - old_position_mkt_val + new_position_mkt_val
-        ticker_concentration = (new_position_mkt_val / total_after_dca * 100) if total_after_dca > 0 else 0.0
+# ============================================================================
+# PAGE NAVIGATION — lazy per-page rendering (replaces st.tabs)
+#
+# st.tabs renders every tab body on every rerun, so the News fetch, the Deep
+# Dive API calls, and the signal bundles all paid their network cost even when
+# the user was on another tab. Here only the selected page's code runs —
+# clicking "📰 News Signals" is what triggers its auto-fetch.
+# ============================================================================
+PAGES = [
+    "🏆 Pick of the Day",
+    "📋 Watchlist + Portfolio",
+    "🔍 Deep Dive",
+    "📊 General Screener",
+    "📰 News Signals",
+    "📅 Corporate Calendar",
+]
+selected_page = st.pills(
+    "Navigasi",
+    options=PAGES,
+    default=PAGES[0],
+    key="page_select",
+    label_visibility="collapsed",
+)
 
-        st.markdown("##### 📊 Hasil Simulasi")
-        rc1, rc2, rc3, rc4 = st.columns(4)
-        rc1.metric("Avg Lama → Baru", f"Rp {old_avg:,.0f} → Rp {new_avg:,.0f}")
-        rc2.metric("Total Lot Baru", f"{new_lots:,} lot")
-        rc3.metric(
-            "Jarak ke Breakeven", f"{breakeven_gap_pct:+.2f}%",
-            help="Positif = live price masih perlu naik sekian % untuk balik modal dari avg baru."
-        )
-        rc4.metric("Konsentrasi di Ticker Ini", f"{ticker_concentration:.1f}%")
-
-        if ticker_concentration > 25:
-            st.warning(
-                f"⚠️ Setelah average down, **{dca_ticker}** akan menyumbang "
-                f"**{ticker_concentration:.1f}%** dari total portofolio — di atas batas "
-                f"konsentrasi umum 25% per saham. Pertimbangkan ulang ukurannya."
-            )
-
-        confirm_dca = st.checkbox(
-            f"Saya yakin ingin average down {dca_ticker} ke avg baru Rp {new_avg:,.0f} ({new_lots} lot)",
-            key="dca_confirm"
-        )
-        if st.button("✅ Terapkan Average Down ke Portfolio", disabled=not confirm_dca, key="dca_apply_btn"):
-            sqlite_repository.remove_portfolio_by_ticker(dca_ticker)
-            sqlite_repository.add_portfolio(dca_ticker, round(new_avg, 2), new_lots)
-            st.session_state.portfolio = sqlite_repository.get_portfolio()
-            st.toast(f"Average down {dca_ticker} diterapkan! Avg baru: Rp {new_avg:,.0f}")
-            st.rerun()
+# ── PAGE: PICK OF THE DAY (landing) — memoized Mega Score, computed lazily ──
+if selected_page == PAGES[0]:
+    if st.session_state.screener_data and scored_list_global:
+        if mega_fingerprint != st.session_state.get("mega_fingerprint") or not st.session_state.get("mega_rows"):
+            with st.status("🏆 Menyusun Pick of the Day — menghitung sinyal...", expanded=False) as status:
+                try:
+                    st.session_state.mega_rows = _build_mega_rows(scored_list_global)
+                    st.session_state.mega_fingerprint = mega_fingerprint
+                except Exception as exc:
+                    logger.warning(f"signal bundle computation failed: {exc}")
+                    st.session_state.mega_rows = {}
+                if status is not None:
+                    status.update(label="✅ Sinyal Pick of the Day siap", state="complete")
     else:
-        st.info("Portfolio is empty. Add assets using the fields above.")
+        st.session_state.mega_rows = {}
+    render_tab_pick_of_the_day(total_portfolio_value=total_portfolio_value)
 
-# ============================================================================
-# TAB RENDERING PORTING
-# ============================================================================
-with tab1:
-    from ui.tabs.tab1_live_feed import render_tab1
-    render_tab1(ticker_df)
-
-with tab2:
-    from ui.tabs.tab2_recommendations import render_tab2
-    render_tab2(scored_list)
-
-with tab3:
-    scalp_data, swing_data, lt_data = render_tab3(scored_list)
-
-with tab4:
-    trending_source_list = scored_list_global if exclude_filters_trending else scored_list
-    trending_data = render_tab4(ticker_df, trending_source_list)
-
-with tab5:
-    from ui.tabs.tab5_bsjp import render_tab5
-    bsjp_data = render_tab5(scored_list_global, scored_list, exclude_filters_bsjp)
-
-with tab6:
-    from ui.tabs.tab6_minervini import render_tab6
-    minervini_data = render_tab6(scored_list_global, scored_list, exclude_filters_minervini, ihsg)
-
-with tab7:
-    render_tab7(ticker_df, scored_list, total_portfolio_value=total_portfolio_value)
-
-with tab8:
-    news_data = render_tab8(scored_list, ticker_df)
-
-with tab9:
-    pre_ara_data = render_tab9(scored_list)
-
-with tab10:
-    render_tab10(scored_list)
-
-with tab11:
-    from ui.tabs.tab11_top_picks import render_tab11
-    render_tab11(
-        scored_list,
-        bsjp_data=bsjp_data,
-        minervini_data=minervini_data,
-        pre_ara_rows=pre_ara_data,
-        trending_rows=trending_data,
-        news_sentiment_rows=news_data
+# ── PAGE: WATCHLIST + PORTFOLIO ──────────────────────────────────────────
+elif selected_page == PAGES[1]:
+    render_tab_watchlist_portfolio(
+        ticker_df,
+        hist_lookup,
+        total_portfolio_value=total_portfolio_value,
     )
 
-with tab_cal:
+# ── PAGE: DEEP DIVE (Deep Analysis + Elliott Wave) ───────────────────────
+elif selected_page == PAGES[2]:
+    render_tab7(ticker_df, scored_list, total_portfolio_value=total_portfolio_value)
+    with st.expander("🌊 Elliott Wave Analysis", expanded=False):
+        render_elliott_wave_view(scored_list)
+
+# ── PAGE: GENERAL SCREENER ───────────────────────────────────────────────
+elif selected_page == PAGES[3]:
+    render_tab3(scored_list)
+
+# ── PAGE: NEWS SIGNALS — auto-fetches when opened (page-gated) ───────────
+elif selected_page == PAGES[4]:
+    render_tab8(scored_list, ticker_df)
+
+# ── PAGE: CORPORATE CALENDAR ─────────────────────────────────────────────
+elif selected_page == PAGES[5]:
     from ui.tabs.tab12_calendar import render_tab12
     render_tab12()
-
-with tab_tw:
-    render_tab13_twitter(
-        ticker_df=ticker_df,
-        scored_list=scored_list,
-        screener_data_map=st.session_state.screener_data,
-    )

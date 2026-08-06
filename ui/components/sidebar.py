@@ -1,22 +1,36 @@
 """
 Sidebar filters + auto-refresh countdown.
+
+Visual redesign (glass panel + section headers) matching the header / Deep
+Dive design tokens. All widget keys and the returned dict are unchanged.
 """
 import streamlit as st
 import time
 
 
+def _section(title: str) -> None:
+    st.markdown(
+        f'<div class="settings-section-title">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_sidebar(ticker_df, fetch_screener_batch):
     """Returns dict of sidebar state used downstream."""
     with st.sidebar:
-        st.markdown("## 🔍 Screener Settings")
-        st.markdown("---")
+        st.markdown("""
+        <div class="settings-panel">
+            <div class="settings-panel-title">🔍 Screener Settings</div>
+            <div class="settings-panel-sub">Filter, auto-scan &amp; fetch tuning</div>
+        </div>
+        """, unsafe_allow_html=True)
 
         if st.query_params.get("auto_scan", "false") == "true":
             st.session_state["trigger_auto_scan"] = True
             st.query_params["auto_scan"] = "false"
 
         # Auto Refresh
-        st.subheader("🔁 Auto Refresh")
+        _section("🔁 Auto Refresh")
         init_auto_refresh = st.query_params.get("auto_refresh", "false") == "true"
         init_interval = int(st.query_params.get("refresh_interval", "10"))
         if init_interval not in [5, 10, 15, 30]:
@@ -54,15 +68,13 @@ def render_sidebar(ticker_df, fetch_screener_batch):
             if st.query_params.get("auto_refresh") == "true":
                 st.query_params["auto_refresh"] = "false"
 
-        st.markdown("---")
-        st.subheader("⏱️ Fetch Polling Delay")
+        _section("⏱️ Fetch Polling Delay")
         fetch_delay = st.slider("Delay per Ticker (seconds)", min_value=0.1, max_value=3.0, value=0.5, step=0.1)
 
-        st.subheader("📊 Scan Ticker Limit")
+        _section("📊 Scan Ticker Limit")
         max_scan = st.slider("Max Tickers to Scan", min_value=10, max_value=min(500, len(ticker_df)) if not ticker_df.empty else 100, value=50, step=10)
 
-        st.markdown("---")
-        st.subheader("🎯 Watchlist Filter")
+        _section("🎯 Watchlist Filter")
         unique_sectors = sorted(list(ticker_df["Sector"].unique())) if "Sector" in ticker_df.columns else []
         selected_sectors = st.multiselect("Sectors", unique_sectors, default=[])
 
@@ -71,14 +83,8 @@ def render_sidebar(ticker_df, fetch_screener_batch):
 
         min_score = st.slider("Minimum Historical Score v2", 0, 100, 50)
 
-        st.markdown("---")
-        st.subheader("⚙️ Tab Scope Options")
-        exclude_filters_trending = st.checkbox("Exclude filters for Trending Stocks", value=True)
-        exclude_filters_bsjp = st.checkbox("Exclude filters for BSJP", value=True)
-        exclude_filters_minervini = st.checkbox("Exclude filters for Minervini Trend", value=True)
-
-        st.markdown("---")
-        search_ticker = st.text_input("Lookup Specific Ticker (e.g. ADRO)", "").upper().strip()
+        _section("🔎 Lookup")
+        search_ticker = st.text_input("Specific Ticker (e.g. ADRO)", "").upper().strip()
 
     return {
         "fetch_delay": fetch_delay,
@@ -86,8 +92,5 @@ def render_sidebar(ticker_df, fetch_screener_batch):
         "selected_sectors": selected_sectors,
         "selected_ranks": selected_ranks,
         "min_score": min_score,
-        "exclude_filters_trending": exclude_filters_trending,
-        "exclude_filters_bsjp": exclude_filters_bsjp,
-        "exclude_filters_minervini": exclude_filters_minervini,
         "search_ticker": search_ticker,
     }

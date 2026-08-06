@@ -37,7 +37,16 @@ class StockbitProvider:
         self._token = token
         self._client = httpx.AsyncClient(
             base_url=BASE_URL,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                # Exodus WAF returns HTTP 403 for bare python-httpx UAs.
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 "
+                    "Safari/537.36"
+                ),
+                "Accept": "application/json",
+            },
             timeout=10.0,
         )
 
