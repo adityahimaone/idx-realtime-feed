@@ -644,3 +644,59 @@ def fetch_all_news() -> dict:
             logger.warning(f"news source {tag} fetch error: {exc}")
             results[tag] = []
     return results
+
+
+def ticker_sentiment_map(tickers: list[str]) -> dict:
+    """Per-ticker overnight sentiment summary for the pre-market predictor.
+
+    Pure function (no st.cache_data) reusing the multi-source news pipeline:
+    `fetch_all_news` (6 sources) + `fetch_news_for_tickers` (yfinance) +
+    the shared lexicon scorers. Matches the News tab's ±0.3 polarity labels.
+
+    Returns {ticker: {polarity, confidence, headline, combined}} where
+    polarity is "positif" | "negatif" | "netral", confidence is capped at 1.0,
+    and headline is the first relevant mention title (else the yfinance latest).
+    Never raises — per-ticker failures are skipped.
+    """
+    from data.fetchers import fetch_news_for_tickers
+    from data.sentiment import _score_headline, is_relevant_to_ticker
+
+    all_articles: list[dict] = []
+    for src, art_list in fetch_all_news().items():
+        for art in (art_list or []):
+            all_articles.append({**art, "source": src})
+    yf_data = fetch_news_for_tickers(list(tickers or []))
+
+    result: dict[str, dict] = {}
+    for ticker in (tickers or []):
+        try:
+            mention_score = 0.0
+            headline = ""
+            for art in all_articles:
+                if not is_relevant_to_ticker(art.get("title", ""), ticker):
+                    continue
+                score = _score_headline(art.get("title", ""))
+                if score == 0.0:
+                    continue
+                mention_score += score
+                if not headline:
+                    headline = art.get("title", "")
+
+            yf_row = yf_data.get(ticker, {})
+            try:
+                yf_sent = float(yf_row.get("sentiment", 0) or 0)
+            except (TypeError, ValueError):
+                yf_sent = 0.0
+            combined = yf_sent + mention_score
+            polarity = "positif" if combined >= 0.3 else "negatif" if combined <= -0.3 else "netral"
+            if not headline:
+                headline = yf_row.get("latest", "") or ""
+            result[ticker] = {
+                "polarity": polarity,
+                "confidence": round(min(1.0, abs(combined) / 2.0), 3),
+                "headline": headline,
+                "combined": round(combined, 3),
+            }
+        except Exception:
+            continue
+    return result

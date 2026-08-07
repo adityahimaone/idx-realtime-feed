@@ -55,6 +55,7 @@ cp .env.example .env
 Key configuration parameters:
 - `STOCKBIT_USERNAME` / `STOCKBIT_PASSWORD` (used for headless authentication)
 - `STOCKBIT_BEARER_TOKEN` (automatically managed or pasted manually)
+- `ITICK_TOKEN` (optional backup source — itick.org, free plan 5 calls/minute)
 - `MARKET_ALPHA_SPREADSHEET_ID` (target Google Sheet ID)
 
 ### 3. Update Token Manually
@@ -84,14 +85,21 @@ uv run python scripts/diagnostics.py --staging
 ```
 
 ### 5. Freshness Engine (multi-source)
-`data/fetchers.py::pick_freshest_source` (async) compares **Stockbit**, **IDX
-endpoint**, **Google Sheets**, and **yfinance** quotes and picks the freshest
+`data/fetchers.py::pick_freshest_source` (async) compares **Stockbit**, **itick.org**,
+**IDX endpoint**, **Google Sheets**, and **yfinance** quotes and picks the freshest
 winner:
 
-- Freshness thresholds: Stockbit 2.0 min, IDX 5.0 min, GSheet/yfinance 10.0 min.
-- Tie-break within a 5s window by priority: stockbit > idx > gsheet > yfinance.
+- Freshness thresholds: Stockbit 2.0 min, itick 2.0 min, IDX 5.0 min,
+  GSheet/yfinance 10.0 min.
+- Tie-break within a 5s window by priority: stockbit > itick > idx > gsheet > yfinance.
 - Stockbit is a guarded 4th source: 60s TTL cache per symbol + a rolling budget
   of 8 fetches per 60s window so the ~40 req/5-min token limit is never hit.
+- **itick.org is a backup source** (token from `ITICK_TOKEN`): batched quotes
+  are pre-fetched once per refresh (`fetch_itick_quotes_batch`, max 50 codes/call)
+  and fed to the freshness engine via an in-memory dict — no per-ticker network
+  calls. Deep Analysis falls back to itick Quotes + Depth when Stockbit fails.
+  Free plan limited to 5 calls/minute, guarded by a rolling budget + 60s TTL
+  cache; skipped silently when the token is empty or invalid (HTTP 401).
 - `services/auth_service.py::get_cached_token()` returns env/cache tokens only —
   never triggers an Obscura browser login (safe for the Streamlit event loop).
 
@@ -226,6 +234,30 @@ Backend scripts intended to run persistently or as CLI tools.
   ```bash
   uv run python ticker_stream.py BBCA
   ```
+
+### 3. Telegram Bot Cron Jobs (Mon–Fri)
+Telegram credentials come from `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). Run from the repo root with `uv`:
+
+| WIB | Job | Command |
+|---|---|---|
+| 08:40 | 🔭 Pre-Market Watch (heuristic gap-up watch list) | `uv run python -m bot.pre_market_predictor` |
+| 08:50 | ☀️ Morning Brief (pre-market) | `uv run python -c "from bot.morning import run_and_send; import asyncio; asyncio.run(run_and_send('premarket'))"` |
+| 09:15 | ☀️ Morning Open (early bird) | `uv run python -c "from bot.morning import run_and_send; import asyncio; asyncio.run(run_and_send('early'))"` |
+| 14:30 | 🌙 BSJP Closing Auction | `uv run python -c "from bot.bsjp import run_and_send; import asyncio; asyncio.run(run_and_send())"` |
+| 16:00 | 📊 EOD Recap | `uv run python -c "from bot.eod import run_and_send; import asyncio; asyncio.run(run_and_send())"` |
+
+Example crontab lines (adjust the repo path):
+
+```cron
+# idx-realtime-feed Telegram bots — Mon–Fri
+40 8 * * 1-5  cd /path/to/idx-realtime-feed && uv run python -m bot.pre_market_predictor >> logs/cron.log 2>&1
+50 8 * * 1-5  cd /path/to/idx-realtime-feed && uv run python -c "from bot.morning import run_and_send; import asyncio; asyncio.run(run_and_send('premarket'))" >> logs/cron.log 2>&1
+15 9 * * 1-5  cd /path/to/idx-realtime-feed && uv run python -c "from bot.morning import run_and_send; import asyncio; asyncio.run(run_and_send('early'))" >> logs/cron.log 2>&1
+30 14 * * 1-5 cd /path/to/idx-realtime-feed && uv run python -c "from bot.bsjp import run_and_send; import asyncio; asyncio.run(run_and_send())" >> logs/cron.log 2>&1
+0 16 * * 1-5  cd /path/to/idx-realtime-feed && uv run python -c "from bot.eod import run_and_send; import asyncio; asyncio.run(run_and_send())" >> logs/cron.log 2>&1
+```
+
+The 08:40 job persists its rows to SQLite (`pre_market_predictions`); the Pick of the Day tab renders them read-only, and `uv run python scripts/backtest_premarket.py --days 7` recalibrates the heuristic weights.
 
 ---
 

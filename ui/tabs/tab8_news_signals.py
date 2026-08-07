@@ -478,6 +478,13 @@ scored_list, ticker_df):
 
             rows = build_per_ticker_sentiment(all_articles, yf_data, tickers)
 
+            # Publish for the Pick of the Day mega score — it reuses these rows
+            # from session state instead of running its own (slow) news fetch.
+            # The nonce bumps the mega-score fingerprint so the landing rebuild
+            # (cheap, builders are cached) picks up the fresh sentiment.
+            st.session_state["mega_news_rows"] = rows
+            st.session_state["mega_news_nonce"] = time.time()
+
             if rows:
                 display_cols = [
                     "Ticker", "Sentimen", "Combined Score",

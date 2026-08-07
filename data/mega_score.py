@@ -59,3 +59,12 @@ def compute_mega_score(signals: dict, horizon: str) -> dict:
         "defaulted": defaulted,
         "confidence": confidence,
     }
+
+
+def news_sentiment_to_score(combined: float) -> float:
+    """Map combined news sentiment (roughly -3..+3) to a 0-100 Mega Score input.
+
+    Neutral sentiment maps to 50; each +1.0 of combined sentiment adds +20
+    (capped at 100), each -1.0 subtracts 20 (floored at 0).
+    """
+    return round(min(max(50 + float(combined) * 20, 0), 100), 1)

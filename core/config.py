@@ -17,6 +17,10 @@ class Config:
         "STOCKBIT_TOKEN_CACHE_PATH", ".cache/stockbit_token.json"
     )
 
+    # --- itick.org backup source (optional) ---
+    # Free plan: 5 calls/minute. Skipped silently when empty/invalid (HTTP 401).
+    ITICK_TOKEN: str = os.getenv("ITICK_TOKEN", "")
+
     # --- Google Sheets ---
     GOOGLE_SERVICE_ACCOUNT: str = os.getenv("GOOGLE_SERVICE_ACCOUNT", "")
     MARKET_ALPHA_SPREADSHEET_ID: str = os.getenv("MARKET_ALPHA_SPREADSHEET_ID", "")

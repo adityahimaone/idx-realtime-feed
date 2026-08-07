@@ -4,7 +4,10 @@ Renders the Mega Score ranking computed in app.py before the tabs render
 (st.session_state.mega_rows), so a full ranked verdict is visible without
 visiting any other tab first.
 """
+import datetime
+
 import pandas as pd
+import pytz
 import streamlit as st
 
 from data.fetchers import safe_float
@@ -219,7 +222,59 @@ def _strategy_detail(r: dict, total_portfolio_value: float):
         )
 
 
+def _render_pre_market_watch():
+    """🔭 Pre-Market Watch — today's heuristic predictions from SQLite.
+
+    Read-only: the 08:40 WIB cron job (`bot.pre_market_predictor`) computes and
+    persists these rows; this expander never recomputes or fetches news.
+    """
+    from repositories.sqlite_repository import sqlite_repository
+
+    today = datetime.datetime.now(pytz.timezone("Asia/Jakarta")).date().isoformat()
+    preds = sqlite_repository.get_premarket_predictions(today)
+
+    with st.expander("🔭 Pre-Market Watch — kandidat gap-up (heuristic)", expanded=False):
+        if not preds:
+            run_info = sqlite_repository.get_premarket_run(today)
+            if run_info:
+                try:
+                    ran_disp = (
+                        datetime.datetime.fromisoformat(run_info["ran_at"]).strftime("%d %b %H:%M")
+                        + " WIB"
+                    )
+                except Exception:
+                    ran_disp = str(run_info["ran_at"])
+                st.caption(
+                    f"✅ Job sudah jalan **{ran_disp}** — tidak ada kandidat hari ini "
+                    "(semua skor < 20). Data BSJP/EOD terisi otomatis setelah job 14:30/16:00 jalan."
+                )
+            else:
+                st.caption(
+                    "Belum ada prediksi hari ini. Job **08:40 WIB** (`bot.pre_market_predictor`) "
+                    "mengisi daftar ini otomatis setiap pagi."
+                )
+            return
+        df = pd.DataFrame([
+            {
+                "Ticker": p["ticker"],
+                "Score": p["score"],
+                "Tier": p["tier"],
+                "Reasons": " · ".join(p["reasons"]),
+            }
+            for p in preds
+        ])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Skor heuristic pra-buka: ARA streak + BSJP kemarin + berita semalam + "
+            "kalender hari ini, × multiplier pasar. Tier: WATCH CLOSELY ≥60 · "
+            "ON RADAR ≥35 · BELOW RADAR ≥20 (sinyal lemah, catatan saja). "
+            "Bukan prediksi/verdict final."
+        )
+
+
 def render_tab_pick_of_the_day(total_portfolio_value=0.0):
+    _render_pre_market_watch()
+
     h1, h2 = st.columns([5, 1])
     with h1:
         st.markdown("### 🏆 Pick of the Day — Unified Mega Score")
@@ -239,9 +294,8 @@ def render_tab_pick_of_the_day(total_portfolio_value=0.0):
             st.rerun()
 
     st.caption(
-        "💡 Sentimen berita tidak ikut dihitung di landing view agar loading tetap cepat — "
-        "buka tab **📰 News Signals** untuk analisis berita lengkap. Sinyal berita tampil "
-        "netral (50) di Mega Score sampai tersedia."
+        "💡 Sentimen berita ikut dihitung di Mega Score setelah tab **📰 News Signals** "
+        "selesai fetch (cache 5 menit) — sebelum itu netral (50), agar landing tetap cepat."
     )
 
     if "pick_horizon" not in st.session_state:
@@ -324,6 +378,8 @@ def render_tab_pick_of_the_day(total_portfolio_value=0.0):
                 flags.append("🚀 Pre-ARA")
             if r.get("has_trending"):
                 flags.append("🔥 Trending")
+            if r.get("has_news"):
+                flags.append("📰 News")
             if flags:
                 st.caption("Sub-signal flags: " + " · ".join(flags))
             if r.get("defaulted"):

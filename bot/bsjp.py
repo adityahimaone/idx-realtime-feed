@@ -5,6 +5,7 @@ Deteksi saham dengan CPR tinggi, VCC, net foreign positif menjelang closing.
 import sys
 import os
 import asyncio
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -12,6 +13,11 @@ from bot.data_pipeline import get_watchlist_tickers, scan_all, now_wib_str, get_
 from data.fetchers import safe_float
 from data.scoring import bsjp_score, bsjp_tier, is_bsjp_entry_valid
 from bot.telegram import send_telegram
+from repositories.sqlite_repository import sqlite_repository
+
+import pytz
+
+WIB = pytz.timezone("Asia/Jakarta")
 
 
 async def run_and_send():
@@ -73,7 +79,20 @@ async def run_and_send():
     if not bsjp_candidates:
         msg = f"🌙 *BSJP Closing* — {now_wib_str()}\n\nTidak ada kandidat BSJP saat ini. Semua CPR < 50% atau sinyal lemah.\n\n#BSJP #IDX"
         print(msg)
-        return
+        await send_telegram(msg)
+        return msg
+
+    # Persist candidates (unlocks the pre-market watch list the next morning)
+    try:
+        trade_date = datetime.now(WIB).date().isoformat()
+        for c in bsjp_candidates:
+            sqlite_repository.save_bsjp_result(
+                ticker=c["ticker"], trade_date=trade_date, tier=c["tier"],
+                score=c["score"], cpr=c["cpr"], vcc=c["vcc"],
+                net_foreign=c["net_foreign"], valid=c["valid"], price=c["price"],
+            )
+    except Exception as exc:
+        print(f"bsjp persist error: {exc}")
 
     prime = [c for c in bsjp_candidates if "Prime BSJP" in c["tier"]]
     good = [c for c in bsjp_candidates if "Good BSJP" in c["tier"]]
@@ -104,4 +123,5 @@ async def run_and_send():
 
     msg = "\n".join(parts) + "\n\n#BSJP #IDX"
     print(msg)
+    await send_telegram(msg)
     return msg

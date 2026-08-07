@@ -1,5 +1,5 @@
 import pytest
-from data.mega_score import HORIZON_WEIGHTS, compute_mega_score
+from data.mega_score import HORIZON_WEIGHTS, compute_mega_score, news_sentiment_to_score
 
 
 def test_missing_signals_default_to_50_and_are_reported():
@@ -64,3 +64,26 @@ def test_tier_boundaries():
                               "trending_score": 10, "pre_ara_score": 10}, "scalping")
     assert res["score"] == 10.0
     assert res["tier"] == "🔴 HINDARI"
+
+
+def test_news_sentiment_to_score_boundaries():
+    # neutral → 50, positive raises, negative lowers, clamped 0..100
+    assert news_sentiment_to_score(0) == 50.0
+    assert news_sentiment_to_score(2.5) == 100.0
+    assert news_sentiment_to_score(-3) == 0.0
+    assert news_sentiment_to_score(0.5) == 60.0
+    assert news_sentiment_to_score(10) == 100.0
+    assert news_sentiment_to_score(-10) == 0.0
+
+
+def test_swing_bsjp_uses_news_sentiment_score():
+    signals = {
+        "intraday_score": 70,
+        "bsjp_score": 80,
+        "news_sentiment_score": news_sentiment_to_score(2.0),  # 90
+        "trending_score": 60,
+    }
+    res = compute_mega_score(signals, "swing_bsjp")
+    assert res["available"]["news_sentiment_score"] is True
+    assert res["breakdown"]["news_sentiment_score"] == 90.0
+    assert "news_sentiment_score" not in res["defaulted"]

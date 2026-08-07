@@ -5,6 +5,7 @@ Design language: two separate glass cards (`#0F172A`, 14px radius, Inter,
 exact-property transitions, reduced-motion respected). Rendered as HTML
 components so the JS-driven WIB clock and Chart.js sparkline keep working.
 """
+import html as _html_escape
 import streamlit as st
 from datetime import datetime
 import pytz
@@ -14,6 +15,10 @@ WIB = pytz.timezone("Asia/Jakarta")
 # Sources that must be fully connected for core features; when inactive they
 # count as hard-down (red) instead of merely degraded (amber).
 _HARD_DOWN = {"Google Sheets", "Exodus API"}
+
+# Short status word shown per chip (dot + name + word). The longer `desc`
+# passed by the caller (or the state word) is exposed as the tooltip title.
+_STATE_WORD = {"ok": "Online", "degraded": "Standby", "down": "Down", "checking": "Checking…"}
 
 _CARD_CSS = """
 <style>
@@ -105,11 +110,12 @@ def _dot_html(state: str) -> str:
 def render_status_board(api_statuses: dict | None = None, container=None):
     """Market Status + per-source API indicators (live clock JS-driven).
 
-    `api_statuses` maps source name → {"active": bool, "desc": str}. Sources in
-    _HARD_DOWN render red when inactive; everything else renders amber
-    (degraded/standby) so fallbacks like Google Finance stay visible.
-    `active=None` renders a "checking" (sky) state — used for the provisional
-    header while the data pipeline is still connecting.
+    `api_statuses` maps source name → {"active": bool, "desc": str}. The short
+    `desc` is shown on the chip (e.g. "Registry OK", "Authorized"); full detail
+    can live in the tooltip. Sources in _HARD_DOWN render red when inactive;
+    everything else renders amber (degraded/standby) so fallbacks like Google
+    Finance stay visible. `active=None` renders a "checking" (sky) state — used
+    for the provisional header while the data pipeline is still connecting.
     `container` (optional st.empty placeholder) routes the component there so
     the header can render instantly and be replaced after fetches finish.
     """
@@ -136,11 +142,13 @@ def render_status_board(api_statuses: dict | None = None, container=None):
             state = "down"
         else:
             state = "degraded"
+        word = desc or _STATE_WORD.get(state, state.capitalize())
+        tooltip = _html_escape.escape(desc or f"{source} — {_STATE_WORD.get(state, state.capitalize())}")
         chips += (
-            f'<div class="source-chip">{_dot_html(state)}'
+            f'<div class="source-chip" title="{tooltip}">{_dot_html(state)}'
             f'<div class="source-chip-body">'
             f'<span class="source-chip-name">{source}</span>'
-            f'<span class="source-chip-desc">{desc}</span>'
+            f'<span class="source-chip-desc">{word}</span>'
             f'</div></div>'
         )
 
@@ -165,7 +173,7 @@ def render_status_board(api_statuses: dict | None = None, container=None):
         </div>
     </div>
     <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(148,163,184,0.15); color:#64748B; font-size:0.76em;">
-        Freshness Fallback Pipeline: Google Sheets ➔ yfinance ➔ IDX · Exodus untuk Deep Analysis &amp; Trade Book
+        Stockbit ➔ itick ➔ IDX ➔ GSheet/yfinance · Deep: Exodus ➔ itick
     </div>
 </div>
 <script>
@@ -204,10 +212,10 @@ def render_status_board(api_statuses: dict | None = None, container=None):
 </script>
 """
     if container is None:
-        st.components.v1.html(html, height=168, scrolling=False)
+        st.components.v1.html(html, height=190, scrolling=False)
     else:
         with container:
-            st.components.v1.html(html, height=168, scrolling=False)
+            st.components.v1.html(html, height=190, scrolling=False)
 
 
 def render_ihsg_widget(ihsg: dict | None, container=None, loading: bool = False):

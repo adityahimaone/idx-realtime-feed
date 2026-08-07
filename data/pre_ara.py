@@ -8,8 +8,14 @@ ARB: −7% semua tier (Papan Utama & Pengembangan).
 """
 import math
 import time
+from datetime import datetime
+
+import pytz
 import yfinance as yf
+
 from data.fetchers import safe_float
+
+WIB = pytz.timezone("Asia/Jakarta")
 
 # Cache dictionary to prevent redundant yfinance API calls during live feeds
 _streak_cache = {}
@@ -96,14 +102,17 @@ def ara_proximity_score(last: float, prev_close: float, ara_price: float) -> flo
     return round(min(max(progress, 0), 1) * 100, 1)
 
 
-def detect_ara_streak(symbol: str, days: int = 5) -> dict:
+def detect_ara_streak(symbol: str, days: int = 5, exclude_today: bool = False) -> dict:
     """
     Check consecutive ARA days using yfinance historical data.
     Returns streak count and riding flag.
     Cached for 15 minutes to maximize live execution speed.
+
+    exclude_today: drop the final history bar when its date is today WIB, so a
+    pre-market run (before open) never counts the in-progress day as an ARA day.
     """
     now = time.time()
-    cache_key = (symbol, days)
+    cache_key = (symbol, days, exclude_today)
     if cache_key in _streak_cache:
         cached_res, expiry = _streak_cache[cache_key]
         if now < expiry:
@@ -117,6 +126,18 @@ def detect_ara_streak(symbol: str, days: int = 5) -> dict:
         res = {"streak": 0, "consecutive_ara": False, "is_riding": False}
         _streak_cache[cache_key] = (res, now + 300)
         return res
+
+    if exclude_today and hist is not None and not hist.empty:
+        try:
+            last_bar_ts = hist.index[-1]
+            if last_bar_ts.tzinfo is not None:
+                last_bar_date = last_bar_ts.astimezone(WIB).date()
+            else:
+                last_bar_date = last_bar_ts.date()
+            if last_bar_date == datetime.now(WIB).date():
+                hist = hist.iloc[:-1]
+        except Exception:
+            pass
 
     if hist.empty or len(hist) < 2:
         res = {"streak": 0, "consecutive_ara": False, "is_riding": False}

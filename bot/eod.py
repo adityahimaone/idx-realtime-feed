@@ -13,6 +13,7 @@ from data.fetchers import safe_float
 from data.scoring import trend_tier, trending_score
 from data.pre_ara import get_ara_price, ara_proximity_score
 from bot.telegram import send_telegram
+from repositories.sqlite_repository import sqlite_repository
 
 
 async def run_and_send():
@@ -29,19 +30,42 @@ async def run_and_send():
     top_losers = sorted(results, key=lambda x: x["chg_pct"])
     most_active = sorted(results, key=lambda x: x["vol_spike"], reverse=True)
 
-    # Pre-ARA result (who hit ARA?)
+    # Pre-ARA result (who hit ARA?) + persist one row per scanned ticker
     at_ara = []
     approached = []
+    eod_rows = []
     for r in results:
         price = safe_float(r["live"]["last"])
         prev = safe_float(r["live"]["prev_close"])
+        is_at_ara = False
+        is_approached = False
         if price > 0 and prev > 0:
             ara_price = get_ara_price(prev)
             proximity = ara_proximity_score(price, prev, ara_price)
             if proximity >= 95:
                 at_ara.append(r["ticker"])
+                is_at_ara = True
             elif proximity >= 70:
                 approached.append(r["ticker"])
+                is_approached = True
+        eod_rows.append({
+            "ticker": r["ticker"],
+            "chg_pct": r["chg_pct"],
+            "vol_spike": r["vol_spike"],
+            "score": r["score"],
+            "signal": r["signal"],
+            "at_ara": is_at_ara,
+            "approached_ara": is_approached,
+        })
+
+    # Persist EOD snapshot (feeds pre-market watch list + backtest the next day)
+    try:
+        import pytz
+        from datetime import datetime
+        trade_date = datetime.now(pytz.timezone("Asia/Jakarta")).date().isoformat()
+        sqlite_repository.save_eod_snapshot(trade_date, eod_rows)
+    except Exception as exc:
+        print(f"eod persist error: {exc}")
 
     parts = [f"📊 *EOD Recap*"]
     parts.append(f"📅 {now_wib_str()}")
