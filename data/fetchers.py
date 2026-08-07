@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import asyncio
+import logging
 import time
 from datetime import datetime
 import pytz
@@ -157,9 +158,10 @@ def fetch_idx_source(symbol: str, idx_summary_dict: dict = None) -> dict:
 
 # ─── Freshness selection ─────────────────────────────────────────────────────
 
-SOURCE_PRIORITY = {"stockbit": 0, "idx_endpoint": 1, "gsheet": 2, "yfinance": 3}
+SOURCE_PRIORITY = {"stockbit": 0, "itick": 1, "idx_endpoint": 2, "gsheet": 3, "yfinance": 4}
 FRESHNESS_THRESHOLDS_MIN = {
     "stockbit": 2.0,
+    "itick": 2.0,
     "idx_endpoint": 5.0,
     "gsheet": 10.0,
     "yfinance": 10.0,
@@ -185,6 +187,102 @@ def _stockbit_budget_available() -> bool:
 
 def _stockbit_budget_consume() -> None:
     _stockbit_budget["count"] += 1
+
+
+# itick.org backup-source guard: free plan allows ~5 calls / minute. We mirror
+# the stockbit pattern with a rolling budget of 5 HTTP calls per 60s window
+# plus a 60s TTL cache. A batched quotes pre-fetch consumes 1 call; the Deep
+# Analysis fallback (quotes + depth) consumes 2 calls and is skipped when fewer
+# than 2 remain.
+ITICK_CACHE_TTL = 60.0
+ITICK_BUDGET = 5
+ITICK_BUDGET_WINDOW = 60.0
+_itick_ttl_cache: dict[str, tuple[float, dict]] = {}
+_itick_budget = {"window_start": 0.0, "count": 0}
+
+
+def _itick_budget_available() -> bool:
+    now = time.time()
+    if now - _itick_budget["window_start"] >= ITICK_BUDGET_WINDOW:
+        _itick_budget["window_start"] = now
+        _itick_budget["count"] = 0
+    return _itick_budget["count"] < ITICK_BUDGET
+
+
+def _itick_budget_consume() -> None:
+    _itick_budget["count"] += 1
+
+
+def _itick_budget_remaining() -> int:
+    now = time.time()
+    if now - _itick_budget["window_start"] >= ITICK_BUDGET_WINDOW:
+        _itick_budget["window_start"] = now
+        _itick_budget["count"] = 0
+    return ITICK_BUDGET - _itick_budget["count"]
+
+
+def fetch_itick_quotes_batch(codes: list[str]) -> dict:
+    """Batch quote fetch from itick.org (backup source, ID region).
+
+    One GET /stock/quotes?region=ID&codes=A,B with the `token` header, parsed
+    into {CODE: {last, open, high, low, volume, prev_close, value, frequency,
+    source_ts, error}}. Max 50 codes per call. Returns {} (silently skipped)
+    when no token is configured, on HTTP 401 / request errors, or when the
+    5-call/min budget is exhausted.
+    """
+    if not config.ITICK_TOKEN:
+        return {}
+    codes = [str(c).upper().strip() for c in codes if str(c).strip()]
+    if not codes:
+        return {}
+    codes = codes[:50]
+    key = ",".join(sorted(codes))
+    now = time.time()
+    cached = _itick_ttl_cache.get(key)
+    if cached and now - cached[0] < ITICK_CACHE_TTL:
+        return cached[1]
+    if not _itick_budget_available():
+        logger.warning("itick quotes: budget exhausted, skipping backup batch")
+        return {}
+    _itick_budget_consume()
+
+    url = "https://api.itick.org/stock/quotes"
+    params = {"region": "ID", "codes": ",".join(codes)}
+    headers = {"accept": "application/json", "token": config.ITICK_TOKEN}
+    try:
+        r = requests_cf.get(url, params=params, headers=headers, timeout=10, impersonate="chrome")
+        if r.status_code == 401:
+            logger.warning("itick quotes: HTTP 401 (invalid token) — backup source skipped")
+            return {}
+        if r.status_code != 200:
+            logger.warning(f"itick quotes: HTTP {r.status_code} — backup source skipped")
+            return {}
+        payload = r.json()
+        data = payload.get("data") or {}
+        out = {}
+        for code, q in data.items():
+            ts_ms = safe_float(q.get("t"))
+            source_ts = None
+            if ts_ms > 0:
+                source_ts = datetime.fromtimestamp(ts_ms / 1000.0, tz=pytz.utc).astimezone(WIB)
+            out[code] = {
+                "last": safe_float(q.get("ld")),
+                "open": safe_float(q.get("o")),
+                "high": safe_float(q.get("h")),
+                "low": safe_float(q.get("l")),
+                "volume": safe_float(q.get("v")),
+                "prev_close": safe_float(q.get("p")),
+                "value": safe_float(q.get("tu")),
+                "frequency": 0.0,
+                "source_ts": source_ts,
+                "error": None,
+            }
+        if out:
+            _itick_ttl_cache[key] = (now, out)
+        return out
+    except Exception as exc:
+        logger.warning(f"itick quotes: request error — {exc}")
+        return {}
 
 
 def _stockbit_result_from_snap(snap) -> dict:
@@ -299,10 +397,14 @@ def fetch_stockbit_tradebook(symbol: str, date: str | None = None) -> dict | Non
     return None
 
 
-async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = None) -> dict:
-    """Compare freshness timestamps of Stockbit, IDX, GSheet, and yfinance to
-    select the best winner. Sync source fetchers run in a thread pool; Stockbit
-    goes through its own guarded async path."""
+async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: dict = None,
+                               itick_summary_dict: dict = None) -> dict:
+    """Compare freshness timestamps of Stockbit, itick (optional), IDX, GSheet,
+    and yfinance to select the best winner. Sync source fetchers run in a
+    thread pool; Stockbit goes through its own guarded async path. itick joins
+    the candidates only when `itick_summary_dict` is provided (a pre-fetched
+    batch map — never per-ticker network). The default None keeps legacy
+    callers/tests unchanged."""
     gsheet_res, yfinance_res, idx_res, stockbit_res = await asyncio.gather(
         asyncio.to_thread(fetch_gsheet_source, symbol, hist_row),
         asyncio.to_thread(fetch_yfinance_source, symbol),
@@ -318,6 +420,9 @@ async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: di
     yfinance_res = _safe(yfinance_res)
     idx_res = _safe(idx_res)
     stockbit_res = _safe(stockbit_res)
+    itick_res = {}
+    if itick_summary_dict is not None:
+        itick_res = _safe(itick_summary_dict.get(symbol) or {})
 
     sources = []
 
@@ -332,6 +437,8 @@ async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: di
         sources.append({"name": "idx_endpoint", "res": idx_res, "ts": idx_res["source_ts"]})
     if is_valid(stockbit_res):
         sources.append({"name": "stockbit", "res": stockbit_res, "ts": stockbit_res["source_ts"]})
+    if is_valid(itick_res):
+        sources.append({"name": "itick", "res": itick_res, "ts": itick_res.get("source_ts")})
 
     if not sources:
         # Fallback to gsheet row cache (keeps frequency/value enrichment)
@@ -396,7 +503,14 @@ async def pick_freshest_source(symbol: str, hist_row: dict, idx_summary_dict: di
 
 
 def fetch_news_for_tickers(ticker_list):
-    """Fetch yfinance news + rule-based sentiment for a list of IDX tickers."""
+    """Fetch yfinance news + rule-based sentiment for a list of IDX tickers.
+
+    The yfinance logger is temporarily silenced around the batch: Yahoo's news
+    endpoint frequently returns a faulty (non-JSON) response for IDX tickers,
+    and yfinance logs one ERROR line per symbol ("Failed to retrieve the news
+    and received faulty response instead."), which would spam the terminal on
+    every batched fetch (Pick of the Day, News tab, bots).
+    """
     positive_kw = [
         "naik", "tumbuh", "laba", "positif", "dividen", "akuisisi",
         "ekspansi", "profit", "growth", "rise", "gain", "upgrade",
@@ -408,39 +522,45 @@ def fetch_news_for_tickers(ticker_list):
         "henti", "anjlok", "merugi", "default", "pailit",
     ]
     results = {}
-    for ticker in ticker_list:
-        try:
-            stock = yf.Ticker(f"{ticker}.JK")
-            news = stock.news or []
-            headlines = [a.get("title", "") for a in news[:5] if a.get("title")]
-            if not headlines:
-                continue
-            sentiment = 0
-            for title in headlines:
-                tl = title.lower()
-                sentiment += sum(1 for kw in positive_kw if kw in tl)
-                sentiment -= sum(1 for kw in negative_kw if kw in tl)
-            
-            pub_ts = news[0].get("providerPublishTime", 0)
-            latest_time = ""
-            if pub_ts:
-                try:
-                    import pytz
-                    import datetime as dt
-                    WIB = pytz.timezone("Asia/Jakarta")
-                    dt_wib = dt.datetime.fromtimestamp(pub_ts, tz=WIB)
-                    latest_time = dt_wib.strftime("%d %b %H:%M WIB")
-                except Exception:
-                    pass
+    yf_logger = logging.getLogger("yfinance")
+    prev_level = yf_logger.level
+    yf_logger.setLevel(logging.CRITICAL + 1)
+    try:
+        for ticker in ticker_list:
+            try:
+                stock = yf.Ticker(f"{ticker}.JK")
+                news = stock.news or []
+                headlines = [a.get("title", "") for a in news[:5] if a.get("title")]
+                if not headlines:
+                    continue
+                sentiment = 0
+                for title in headlines:
+                    tl = title.lower()
+                    sentiment += sum(1 for kw in positive_kw if kw in tl)
+                    sentiment -= sum(1 for kw in negative_kw if kw in tl)
 
-            results[ticker] = {
-                "count": len(headlines),
-                "latest": headlines[0],
-                "latest_time": latest_time,
-                "sentiment": sentiment / len(headlines),
-            }
-        except Exception:
-            pass
+                pub_ts = news[0].get("providerPublishTime", 0)
+                latest_time = ""
+                if pub_ts:
+                    try:
+                        import pytz
+                        import datetime as dt
+                        WIB = pytz.timezone("Asia/Jakarta")
+                        dt_wib = dt.datetime.fromtimestamp(pub_ts, tz=WIB)
+                        latest_time = dt_wib.strftime("%d %b %H:%M WIB")
+                    except Exception:
+                        pass
+
+                results[ticker] = {
+                    "count": len(headlines),
+                    "latest": headlines[0],
+                    "latest_time": latest_time,
+                    "sentiment": sentiment / len(headlines),
+                }
+            except Exception:
+                pass
+    finally:
+        yf_logger.setLevel(prev_level)
     return results
 
 
@@ -566,3 +686,82 @@ async def fetch_stockbit_detail(symbol, token=None):
     except Exception:
         pass
     return None
+
+
+async def fetch_itick_snapshot(code: str):
+    """Deep Analysis fallback orderbook snapshot from itick.org.
+
+    Uses two calls: /stock/quotes (OHLC + last) and /stock/depth (10-level
+    bid/ask) with the `token` header, returning an _OrderbookSnap in the same
+    shape as the Stockbit Exodus path. Returns None (silently skipped) when no
+    token is configured, when fewer than 2 budget calls remain in the current
+    60s window, or when either request fails (incl. HTTP 401).
+    """
+    if not config.ITICK_TOKEN:
+        return None
+    if _itick_budget_remaining() < 2:
+        logger.warning("itick snapshot: budget < 2 calls — skipping backup fallback")
+        return None
+    _itick_budget_consume()  # quotes call
+    _itick_budget_consume()  # depth call
+
+    def _get_json(url: str, params: dict) -> dict | None:
+        headers = {"accept": "application/json", "token": config.ITICK_TOKEN}
+        r = requests_cf.get(url, params=params, headers=headers, timeout=10, impersonate="chrome")
+        if r.status_code == 401:
+            logger.warning("itick snapshot: HTTP 401 (invalid token) — backup skipped")
+            return None
+        if r.status_code != 200:
+            logger.warning(f"itick snapshot: HTTP {r.status_code} — backup skipped")
+            return None
+        return r.json()
+
+    code = code.upper().strip()
+    quotes_res, depth_res = await asyncio.gather(
+        asyncio.to_thread(
+            _get_json, "https://api.itick.org/stock/quotes",
+            {"region": "ID", "codes": code},
+        ),
+        asyncio.to_thread(
+            _get_json, "https://api.itick.org/stock/depth",
+            {"region": "ID", "code": code},
+        ),
+        return_exceptions=True,
+    )
+
+    def _safe(payload):
+        return {} if isinstance(payload, BaseException) else (payload or {})
+
+    q = (_safe(quotes_res).get("data") or {}).get(code) or {}
+    depth = _safe(depth_res).get("data") or {}
+
+    last = safe_float(q.get("ld"))
+    if last <= 0:
+        return None
+
+    prev_close = safe_float(q.get("p")) or last
+    change_pct = ((last - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
+    bid_levels = [
+        _OrderLevel(safe_float(b.get("p", 0)), int(safe_float(b.get("v", 0))), int(safe_float(b.get("o", 0))))
+        for b in (depth.get("b") or [])[:10]
+    ]
+    ask_levels = [
+        _OrderLevel(safe_float(a.get("p", 0)), int(safe_float(a.get("v", 0))), int(safe_float(a.get("o", 0))))
+        for a in (depth.get("a") or [])[:10]
+    ]
+    total_bid = sum(l.lot for l in bid_levels)
+    total_ask = sum(l.lot for l in ask_levels)
+    imbalance = total_bid / total_ask if total_ask > 0 else 1.0
+    return _OrderbookSnap(
+        last,
+        change_pct,
+        imbalance,
+        total_bid,
+        bid_levels,
+        ask_levels,
+        open_price=safe_float(q.get("o")) or last,
+        high=safe_float(q.get("h")) or last,
+        low=safe_float(q.get("l")) or last,
+        volume=safe_float(q.get("v")),
+        prev_close=prev_close,
+    )

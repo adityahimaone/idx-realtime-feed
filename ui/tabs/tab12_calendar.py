@@ -1,24 +1,17 @@
 import streamlit as st
 import pandas as pd
-import time
 import calendar
 from datetime import datetime, timedelta
-from curl_cffi import requests as requests_cf
+
+from data.calendar import classify_event, fetch_calendar_events
 
 WIB = __import__("pytz").timezone("Asia/Jakarta")
 
 
 @st.cache_data(ttl=300)
 def fetch_idx_calendar(date_str: str) -> list[dict]:
-    """Fetch corporate calendar from IDX website."""
-    url = f"https://www.idx.co.id/primary/Home/GetCalendar?range=m&date={date_str}"
-    try:
-        r = requests_cf.get(url, timeout=10, impersonate="chrome")
-        if r.status_code == 200:
-            return r.json().get("Results", [])
-    except Exception as e:
-        pass
-    return []
+    """Fetch corporate calendar from IDX website (cached wrapper)."""
+    return fetch_calendar_events(date_str)
 
 
 def render_tab12():
@@ -163,26 +156,10 @@ def render_tab12():
             except Exception:
                 pass
                 
-        # Analyze Signal / Sentiment
-        desc_lower = desc.lower()
-        if "dividen" in desc_lower or "dividend" in desc_lower or "bagi hasil" in desc_lower:
-            signal = "🟢 Speculative Buy (Pre-Dividend Momentum)"
-            notes = "Announcements of dividends usually spark buy interest. Best entry window: H-1 before event or cum-date."
-        elif "stock split" in desc_lower or "pecah saham" in desc_lower:
-            signal = "🟢 Speculative Buy (Liquidity Event)"
-            notes = "Stock splits increase retail accessibility. Positive liquidity momentum is expected leading up to split."
-        elif "penggabungan nilai" in desc_lower or "reverse split" in desc_lower or "merger" in desc_lower:
-            signal = "🔴 Avoid / High Risk (Capital Consolidation)"
-            notes = "Reverse splits are usually negatively perceived due to signs of underlying distress."
-        elif "rups" in desc_lower or "general meeting" in desc_lower:
-            signal = "🟡 Watch (AGMS/EGMS Vote)"
-            notes = "AGMS/EGMS events are regulatory. Look out for unexpected corporate actions (e.g. rights issue or change of board)."
-        elif "rights issue" in desc_lower or "hmetd" in desc_lower:
-            signal = "🟡 Speculative (Capital Expansion)"
-            notes = "Rights issue dilutes shares but raises capital. Bullish if funds are for clear expansions."
-        else:
-            signal = "🟡 Watch (Corporate Event)"
-            notes = "Regular event. Keep an eye on direct mentions in stock news channels."
+        # Analyze Signal / Sentiment (shared classifier — same labels as before)
+        cls = classify_event(desc)
+        signal = cls["signal"]
+        notes = cls["notes"]
 
         event_obj = {
             "Date": event_date.strftime("%d %b %Y") if event_date else start_raw[:10],

@@ -22,6 +22,26 @@ from bot.telegram import send_telegram
 WIB = pytz.timezone("Asia/Jakarta")
 
 
+def get_macro_context() -> dict:
+    """Overnight US market context from yfinance for the pre-market multiplier.
+
+    Returns {risk_on, risk_off, dji_chg, spx_chg}:
+    risk_on when both DJI and S&P 500 closed ≥ 0, risk_off when both < 0,
+    neutral (both False) on any failure or mixed session.
+    """
+    try:
+        dji_chg = safe_float(yf.Ticker("^DJI").info.get("regularMarketChangePercent", 0))
+        spx_chg = safe_float(yf.Ticker("^GSPC").info.get("regularMarketChangePercent", 0))
+        return {
+            "risk_on": dji_chg >= 0 and spx_chg >= 0,
+            "risk_off": dji_chg < 0 and spx_chg < 0,
+            "dji_chg": dji_chg,
+            "spx_chg": spx_chg,
+        }
+    except Exception:
+        return {"risk_on": False, "risk_off": False, "dji_chg": 0.0, "spx_chg": 0.0}
+
+
 async def brief_premarket() -> str:
     """
     08:50 — Before market opens. Focus on:

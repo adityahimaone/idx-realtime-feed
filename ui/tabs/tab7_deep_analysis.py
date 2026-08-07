@@ -3,7 +3,7 @@ import pandas as pd
 import asyncio
 from datetime import datetime
 from core.config import config
-from data.fetchers import safe_float, fetch_stockbit_detail, fetch_stockbit_tradebook
+from data.fetchers import safe_float, fetch_stockbit_detail, fetch_stockbit_tradebook, fetch_itick_snapshot
 from data.tradebook import parse_tradebook, tradebook_profile, adjust_tiers_with_tradebook
 from data.scoring import compute_intraday_score, position_size_lots, minify_html
 from data.orderbook_wall import (
@@ -108,9 +108,32 @@ def _engine_tier_rows(strats) -> str:
     return "".join(rows)
 
 
+def _engine_card_html(kicker_color, kicker, title, pill, note, rows) -> str:
+    """Single compact engine card (`.engine-card`) as minified HTML."""
+    return minify_html(f"""
+    <div class="engine-card">
+        <div class="engine-card-head">
+            <span class="engine-card-kicker" style="color:{kicker_color};">{kicker}</span>
+            <span class="engine-card-title">{title}</span>
+            <span class="engine-card-pill">{pill}</span>
+        </div>
+        <div class="engine-card-note">{note}</div>
+        <table class="engine-table">
+            <thead><tr><th>Tier</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th></tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+    </div>
+    """)
+
+
 def _engine_compare_html(strategies_A, strategies_B, strategies_C,
-                         fib_range_pct, imb) -> str:
-    """Three compact engine cards (A/B/C) below the Engine D verdict."""
+                         fib_range_pct, imb) -> list[str]:
+    """Three compact engine cards (A/B/C) below the Engine D verdict.
+
+    Returns one card HTML string per engine — the caller renders each in its
+    own st.column so all three always show (single-grid markdown blocks get
+    truncated by Streamlit at blank lines; per-column rendering avoids that).
+    """
     rows_a = _engine_tier_rows(strategies_A)
     rows_b = _engine_tier_rows(strategies_B)
     rows_c = _engine_tier_rows(strategies_C) if strategies_C else (
@@ -134,46 +157,14 @@ def _engine_compare_html(strategies_A, strategies_B, strategies_C,
     else:
         c_note = f"Inactive — range {fib_range_pct:.2f}% &lt; 2.0%"
 
-    return minify_html(f"""
-    <div class="engine-grid">
-        <div class="engine-card">
-            <div class="engine-card-head">
-                <span class="engine-card-kicker" style="color:#38BDF8;">Engine A</span>
-                <span class="engine-card-title">Wall Gravity</span>
-                <span class="engine-card-pill">Fallback</span>
-            </div>
-            <div class="engine-card-note">Struktural murni — tanpa konteks pasar.</div>
-            <table class="engine-table">
-                <thead><tr><th>Tier</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th></tr></thead>
-                <tbody>{rows_a}</tbody>
-            </table>
-        </div>
-        <div class="engine-card">
-            <div class="engine-card-head">
-                <span class="engine-card-kicker" style="color:#00D4AA;">Engine B</span>
-                <span class="engine-card-title">Contextual Alpha</span>
-                <span class="engine-card-pill">Konfirmasi</span>
-            </div>
-            <div class="engine-card-note">{b_note}</div>
-            <table class="engine-table">
-                <thead><tr><th>Tier</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th></tr></thead>
-                <tbody>{rows_b}</tbody>
-            </table>
-        </div>
-        <div class="engine-card">
-            <div class="engine-card-head">
-                <span class="engine-card-kicker" style="color:#C9A447;">Engine C</span>
-                <span class="engine-card-title">Fibonacci</span>
-                <span class="engine-card-pill">Konfirmasi</span>
-            </div>
-            <div class="engine-card-note">{c_note}</div>
-            <table class="engine-table">
-                <thead><tr><th>Tier</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th></tr></thead>
-                <tbody>{rows_c}</tbody>
-            </table>
-        </div>
-    </div>
-    """)
+    return [
+        _engine_card_html("#38BDF8", "Engine A", "Wall Gravity", "Fallback",
+                          "Struktural murni — tanpa konteks pasar.", rows_a),
+        _engine_card_html("#00D4AA", "Engine B", "Contextual Alpha", "Konfirmasi",
+                          b_note, rows_b),
+        _engine_card_html("#C9A447", "Engine C", "Fibonacci", "Konfirmasi",
+                          c_note, rows_c),
+    ]
 
 
 def _tier_card_html(tier, meta, tag, base_portfolio, risk_budget, warning=None) -> str:
@@ -238,32 +229,33 @@ def _tier_card_html(tier, meta, tag, base_portfolio, risk_budget, warning=None) 
 def _render_tier_cards(strats, tag, base_portfolio, risk_budget, tw=None):
     """Render the single 3-tier verdict row (Engine D or fallback Engine A).
 
-    Cards live in one CSS grid so all three always share the same height. The
-    HTML is minified before st.markdown: Streamlit's markdown raw-HTML blocks
-    end at blank lines, so any whitespace-only line would drop the rest of the
-    grid (observed: only the first card rendered).
+    One card per st.column so all three render independently — a single
+    markdown HTML grid gets truncated by Streamlit at blank lines (observed:
+    only the first card rendered). `.tier-card` uses height:100% + flex so the
+    three columns share equal height.
     """
     tier_warnings_local = tw or {}
-    html = (
-        '<div class="tier-grid">'
-        + _tier_card_html(
+    cards = [
+        _tier_card_html(
             strats["Aggressive"], _TIER_META["Aggressive"], tag,
             base_portfolio, risk_budget,
             warning=tier_warnings_local.get("Aggressive"),
-        )
-        + _tier_card_html(
+        ),
+        _tier_card_html(
             strats["Moderat"], _TIER_META["Moderat"], tag,
             base_portfolio, risk_budget,
             warning=tier_warnings_local.get("Moderat"),
-        )
-        + _tier_card_html(
+        ),
+        _tier_card_html(
             strats["Low Risk"], _TIER_META["Low Risk"], tag,
             base_portfolio, risk_budget,
             warning=tier_warnings_local.get("Low Risk"),
-        )
-        + "</div>"
-    )
-    st.markdown(minify_html(html), unsafe_allow_html=True)
+        ),
+    ]
+    cols = st.columns(3)
+    for col, card in zip(cols, cards):
+        with col:
+            st.markdown(minify_html(card), unsafe_allow_html=True)
 
 
 def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
@@ -286,10 +278,10 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             if st.button("🔍 Search Ticker", use_container_width=True):
                 st.session_state.deep_analyzed_ticker = search_input
-                # Force refresh by clearing cache
-                cache_key = f"sb_detail_{search_input}"
-                if cache_key in st.session_state:
-                    del st.session_state[cache_key]
+                # Force refresh by clearing cache (all source-mode variants)
+                for _k in [k for k in st.session_state.keys()
+                           if k.startswith(f"sb_detail_{search_input}") or k.startswith(f"sb_time_{search_input}")]:
+                    del st.session_state[_k]
                 st.rerun()
 
         if search_input and search_input != st.session_state.deep_analyzed_ticker:
@@ -313,9 +305,21 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         "source_ts": None
                     }
 
+                st.markdown(
+                    '<div class="panel-title">🔀 Sumber Data Orderbook</div>',
+                    unsafe_allow_html=True,
+                )
+                source_mode = st.radio(
+                    "Pilih sumber orderbook",
+                    ["Auto (Stockbit ➔ itick)", "Stockbit Exodus", "itick (Backup)"],
+                    index=0,
+                    horizontal=True,
+                    key=f"deep_source_mode_{selected_detail}",
+                )
+
                 import time
-                cache_key = f"sb_detail_{selected_detail}"
-                time_key = f"sb_time_{selected_detail}"
+                cache_key = f"sb_detail_{selected_detail}_{source_mode}"
+                time_key = f"sb_time_{selected_detail}_{source_mode}"
                 snap = None
                 now = time.time()
                 was_fresh_fetch = False
@@ -323,14 +327,21 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                 if cache_key in st.session_state and time_key in st.session_state and (now - st.session_state[time_key] < 10):
                     snap = st.session_state[cache_key]
                 else:
-                    with st.spinner(f"⚡ Connecting to Exodus API for {selected_detail}..."):
-                        snap = asyncio.run(fetch_stockbit_detail(selected_detail))
+                    if source_mode != "itick (Backup)":
+                        with st.spinner(f"⚡ Connecting to Exodus API for {selected_detail}..."):
+                            snap = asyncio.run(fetch_stockbit_detail(selected_detail))
+                    if snap is None and source_mode != "Stockbit Exodus":
+                        with st.spinner(f"🔄 itick.org backup untuk {selected_detail}..."):
+                            snap = asyncio.run(fetch_itick_snapshot(selected_detail))
                         if snap:
-                            st.session_state[cache_key] = snap
-                            st.session_state[time_key] = now
-                            was_fresh_fetch = True
+                            snap.source = "itick"
+                    if snap:
+                        st.session_state[cache_key] = snap
+                        st.session_state[time_key] = now
+                        was_fresh_fetch = True
 
                 if snap:
+                    source_label = "ITICK (Backup)" if getattr(snap, "source", "") == "itick" else "EXODUS API"
                     # Override to st.session_state.screener_data
                     st.session_state.screener_data[selected_detail] = {
                         "last": snap.last_price,
@@ -339,16 +350,16 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         "low": snap.low if snap.low else snap.last_price,
                         "volume": snap.volume,
                         "prev_close": snap.prev_close,
-                        "source": "stockbit",
+                        "source": "itick" if source_label == "ITICK (Backup)" else "stockbit",
                         "source_ts": datetime.now(WIB),
-                        "report": "Stockbit Exodus Live Direct (Deep Analysis Override)"
+                        "report": f"{source_label} Live (Deep Analysis Override)"
                     }
 
                     # Refresh raw_data_obj with the overridden values
                     raw_data_obj = st.session_state.screener_data[selected_detail]
 
                     if was_fresh_fetch:
-                        st.toast(f"✅ Price overrides updated for {selected_detail} to {snap.last_price}!")
+                        st.toast(f"✅ Price overrides updated for {selected_detail} to {snap.last_price}! ({source_label})")
 
                         # Save snapshot levels to SQLite for delta tracking
                         for lvl in snap.bid_levels:
@@ -523,11 +534,19 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         </div>
                         <div class="analysis-metric" style="border-top:2px solid #38BDF8;">
                             <div class="analysis-metric-label">Source & Freshness</div>
-                            <div class="analysis-metric-value" style="font-size:1.05em; color:#38BDF8;">EXODUS API</div>
+                            <div class="analysis-metric-value" style="font-size:1.05em; color:#38BDF8;">{source_label}</div>
                             <div class="analysis-metric-sub">TS: {datetime.now(WIB).strftime('%H:%M:%S')} WIB (Live)</div>
                         </div>
                     </div>
                     """), unsafe_allow_html=True)
+
+                    if source_label == "ITICK (Backup)":
+                        if source_mode == "itick (Backup)":
+                            st.caption("🛰️ Sumber aktif: itick.org (backup) — quotes + depth (limit 5 calls/menit).")
+                        else:
+                            st.caption("🔄 Fallback aktif: data dari itick.org (backup) — quotes + depth (limit 5 calls/menit). Stockbit Exodus tidak tersedia.")
+                    else:
+                        st.caption("📡 Data live dari Stockbit Exodus API — orderbook, walls & delta tracking.")
 
                     imb = snap.imbalance_ratio if snap.imbalance_ratio else 1.0
 
@@ -581,13 +600,14 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         "Verdict utama tetap di atas; kartu ini hanya pembanding "
                         "entry/SL/TP/RR tiap engine."
                     )
-                    st.markdown(
-                        _engine_compare_html(
-                            strategies_A, strategies_B, strategies_C,
-                            fib_range_pct, imb,
-                        ),
-                        unsafe_allow_html=True,
+                    engine_cards = _engine_compare_html(
+                        strategies_A, strategies_B, strategies_C,
+                        fib_range_pct, imb,
                     )
+                    eng_cols = st.columns(3)
+                    for eng_col, eng_card in zip(eng_cols, engine_cards):
+                        with eng_col:
+                            st.markdown(eng_card, unsafe_allow_html=True)
 
                     if is_default_port:
                         st.caption("ℹ️ *Note: Sizing calculates from a default Rp 100 Juta port size because your actual portfolio is empty.*")
@@ -709,7 +729,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                             st.dataframe(ask_delta_df, use_container_width=True, hide_index=True)
 
                     # Live Orderbook
-                    st.markdown("### 📥 Live Orderbook Depth (Exodus API)")
+                    st.markdown(f"### 📥 Live Orderbook Depth ({source_label})")
                     dc1, dc2 = st.columns(2)
                     with dc1:
                         st.markdown("#### Bid Depth (Buy Side)")
@@ -740,7 +760,7 @@ def render_tab7(ticker_df, scored_list, total_portfolio_value=0.0):
                         else:
                             st.caption("No live offers available.")
                 else:
-                    st.error("Failed to connect to Exodus API feed. Check auth token or try again.")
+                    st.error("Failed to connect to Exodus API & itick.org backup feed. Check auth token or try again.")
             else:
                 st.warning(f"Ticker '{selected_detail}' not found in the Google Sheets database.")
     else:

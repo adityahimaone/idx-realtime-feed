@@ -272,6 +272,8 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
     margin: 8px 0;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
     height: 100%;
+    display: flex;
+    flex-direction: column;
     transition:
         transform var(--dur-base) var(--ease-out),
         border-color var(--dur-base) var(--ease-out),
@@ -305,7 +307,7 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
     color: #64748B;
 }
 .tier-grid .tier-card { margin: 0; }
-.tier-card ul { list-style: none; padding: 0; margin: 10px 0 0 0; }
+.tier-card ul { list-style: none; padding: 0; margin: 10px 0 0 0; flex: 1; }
 .tier-card li {
     display: flex;
     justify-content: space-between;
@@ -318,7 +320,8 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
 .tier-card li:last-child { border-bottom: 0; }
 .tier-card li b { color: #E2E8F0; font-weight: 600; }
 .tier-card .tier-warning {
-    margin-top: 10px;
+    margin-top: auto;
+    padding-top: 8px;
     font-size: 0.78em;
     color: #FBBF24;
     background: rgba(251, 191, 36, 0.08);
@@ -341,8 +344,10 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
     background: rgba(15, 23, 42, 0.75);
     border: 1px solid rgba(148, 163, 184, 0.15);
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     height: 100%;
+    display: flex;
+    flex-direction: column;
     transition:
         border-color var(--dur-base) var(--ease-out),
         transform var(--dur-base) var(--ease-out);
@@ -362,18 +367,18 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
 }
 .engine-card-kicker {
     font-weight: 800;
-    font-size: 0.76em;
+    font-size: 0.68em;
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }
 .engine-card-title {
     font-weight: 700;
-    font-size: 0.88em;
+    font-size: 0.78em;
     color: #E2E8F0;
 }
 .engine-card-pill {
     margin-left: auto;
-    font-size: 0.68em;
+    font-size: 0.62em;
     font-weight: 700;
     padding: 2px 8px;
     border-radius: 999px;
@@ -383,15 +388,16 @@ div[data-testid="stMetricValue"] { font-size: 1.4rem; }
     white-space: nowrap;
 }
 .engine-card-note {
-    font-size: 0.72em;
+    font-size: 0.66em;
     color: #94A3B8;
-    margin: 4px 0 6px;
+    margin: 3px 0 5px;
     line-height: 1.35;
 }
 .engine-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.74em;
+    font-size: 0.68em;
+    flex: 1;
 }
 .engine-table th {
     text-align: left;

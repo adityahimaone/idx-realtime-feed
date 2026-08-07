@@ -425,7 +425,20 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
             logger.warning(f"Failed to pre-fetch IDX summaries: status {r.status_code}")
     except Exception as e:
         logger.warning(f"Failed to pre-fetch IDX summaries: {e}")
-        
+
+    # 1b. Pre-fetch itick.org backup quotes once (1 call, max 50 codes). Used as
+    # a per-ticker fallback when Stockbit/IDX fail; skipped silently without a
+    # token or on HTTP 401 (5-call/min free-plan budget is guarded internally).
+    itick_summary_dict = {}
+    try:
+        itick_summary_dict = await asyncio.to_thread(
+            fetch_itick_quotes_batch, tickers[:50]
+        )
+        if itick_summary_dict:
+            logger.info(f"Pre-fetched {len(itick_summary_dict)} itick.org backup quotes.")
+    except Exception as e:
+        logger.warning(f"Failed to pre-fetch itick.org quotes: {e}")
+
     total = len(tickers)
     sem = asyncio.Semaphore(5)  # Limit concurrency to 5 tickers at a time
     
@@ -434,7 +447,9 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
     
     async def fetch_single_ticker(ticker, hist_row):
         async with sem:
-            winner_data = await pick_freshest_source(ticker, hist_row, idx_summary_dict)
+            winner_data = await pick_freshest_source(
+                ticker, hist_row, idx_summary_dict, itick_summary_dict
+            )
             return ticker, winner_data
 
     # Create tasks for all tickers
@@ -462,7 +477,7 @@ async def fetch_screener_batch(tickers: list[str], ticker_df: pd.DataFrame, dela
 # ============================================================================
 # MODULAR IMPORTS: SCORING & NARRATIVES
 # ============================================================================
-from data.fetchers import pick_freshest_source
+from data.fetchers import pick_freshest_source, fetch_itick_quotes_batch
 from data.scoring import compute_intraday_score, minify_html
 
 
@@ -636,12 +651,16 @@ def _build_ihsg_result(df, curr, prev, source: str) -> dict:
     }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_ihsg_data() -> dict | None:
     """
     Fetch IHSG data with cascading fallbacks.
     1. yfinance (full 5m sparkline)
     2. Yahoo Finance REST API (full 5m sparkline)
     3. Google Finance scrape (price/change only, no sparkline)
+
+    Cached 60s so the header fills fast on any rerun while the heavy fetch
+    pipeline (screener scan) runs below.
     """
     data = fetch_ihsg_yfinance()
     if data:
@@ -676,11 +695,12 @@ status_ph = st.empty()
 ihsg_ph = st.empty()
 sb_active = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
 provisional_statuses = {
-    "Google Sheets":  {"active": None, "desc": "Menghubungkan ke registry…"},
-    "Yahoo Finance":  {"active": None, "desc": "Menghubungkan ke komposit…"},
-    "Google Finance": {"active": None, "desc": "Scraper standby…"},
+    "Google Sheets":  {"active": None, "desc": "Checking…"},
+    "Yahoo Finance":  {"active": None, "desc": "Checking…"},
+    "Google Finance": {"active": None, "desc": "Checking…"},
     "Exodus API":     {"active": sb_active,
-                       "desc": "Orderbook queue engine (Authorized)" if sb_active else "Unauthorized (Credentials missing)"},
+                       "desc": "Authorized" if sb_active else "No credentials"},
+    "itick.org":      {"active": None, "desc": "Checking…"},
 }
 render_status_board(provisional_statuses, container=status_ph)
 render_ihsg_widget(None, container=ihsg_ph, loading=True)
@@ -701,24 +721,29 @@ if ticker_df.empty:
 # Determine real-time status dynamically based on connection flags
 # 1. Google Sheets
 gsheet_active = not ticker_df.empty
-gs_desc = "Primary registry active pool" if gsheet_active else "Registry connection error"
+gs_desc = "Registry OK" if gsheet_active else "Registry error"
 
 # 2. Yahoo Finance
 yf_active = ihsg is not None and ihsg.get("source") in ("Yahoo Finance", "Yahoo Finance API")
-yf_desc = f"Active Composite source ({ihsg.get('source', 'Offline') if ihsg else 'Offline'})" if yf_active else "Composite source degraded (Fallback active)"
+yf_desc = "Composite aktif" if yf_active else "Composite degraded"
 
 # 3. Google Finance
 gf_active = ihsg is not None and ihsg.get("source") == "Google Finance"
-gf_desc = "Cascading scraper fallback (Active)" if gf_active else "Scraper idle (Standby)"
+gf_desc = "Scraper aktif" if gf_active else "Scraper standby"
 
 # 4. Exodus Stockbit API
-sb_desc = "Orderbook queue engine (Authorized)" if sb_active else "Unauthorized (Credentials missing)"
+sb_desc = "Authorized" if sb_active else "No credentials"
+
+# 5. itick.org backup (optional, token from ITICK_TOKEN)
+itick_active = bool(config.ITICK_TOKEN)
+itick_desc = "Backup ready" if itick_active else "No token"
 
 api_statuses = {
     "Google Sheets":   {"active": gsheet_active, "desc": gs_desc},
     "Yahoo Finance":   {"active": yf_active, "desc": yf_desc},
     "Google Finance":  {"active": gf_active, "desc": gf_desc},
     "Exodus API":      {"active": sb_active, "desc": sb_desc},
+    "itick.org":       {"active": itick_active, "desc": itick_desc},
 }
 
 # Replace the provisional header cards with real data.
@@ -816,9 +841,9 @@ else:
 # ============================================================================
 # SYNC / REFRESH TRIGGER
 # ============================================================================
-col_ref1, col_ref2, col_info = st.columns([1, 1, 2])
+col_ref1, col_ref2, col_ref3, col_info = st.columns([1, 1, 1, 2])
 with col_ref1:
-    if st.button("🔄 Refresh Live Feed (Multi)", use_container_width=True, help="Fetch via Google Sheets ➔ yfinance ➔ IDX Endpoint"):
+    if st.button("🔄 Refresh Live Feed (Multi)", use_container_width=True, help="Multi-source freshness per ticker: Stockbit ➔ itick (backup) ➔ IDX ➔ GSheet/yfinance — winner = freshest & highest priority"):
         live_results = asyncio.run(fetch_screener_batch(cand_list, ticker_df, fetch_delay, hist_lookup))
         st.session_state.screener_data.update(live_results)
         st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Multi-Source)"
@@ -826,7 +851,7 @@ with col_ref1:
 
 with col_ref2:
     sb_auth_ok = bool(config.STOCKBIT_BEARER_TOKEN or (config.STOCKBIT_USERNAME and config.STOCKBIT_PASSWORD))
-    sb_help_text = "Fetch fresh price directly from Stockbit Exodus API" if sb_auth_ok else "Stockbit unavailable (Requires token or credentials in .env)"
+    sb_help_text = "Stockbit live price, fallback ke itick.org backup quote saat provider gagal" if sb_auth_ok else "Stockbit unavailable (Requires token or credentials in .env)"
     if st.button("🚀 Refresh Live Feed (Stockbit)", use_container_width=True, help=sb_help_text, disabled=not sb_auth_ok):
         # Helper batch fetcher for Stockbit prices specifically
         async def fetch_stockbit_screener_batch(tickers, df, delay):
@@ -834,6 +859,11 @@ with col_ref2:
             if not token:
                 st.error("Failed to acquire Stockbit Exodus Auth Token!")
                 return {}
+            # Pre-fetch itick.org backup quotes once — used as a per-ticker
+            # fallback when the Stockbit provider fails for a symbol.
+            itick_summary_dict = await asyncio.to_thread(
+                fetch_itick_quotes_batch, tickers[:50]
+            )
             results = {}
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -843,24 +873,39 @@ with col_ref2:
             for ticker in tickers:
                 status_text.text(f"Fetching {ticker} directly from Stockbit...")
                 provider = StockbitProvider(token)
+                snap = None
                 try:
                     snap = await provider.fetch_orderbook(ticker)
-                    if snap:
-                        results[ticker] = {
-                            "last": snap.last_price,
-                            "open": snap.open_price if snap.open_price else snap.last_price,
-                            "high": snap.high if snap.high else snap.last_price,
-                            "low": snap.low if snap.low else snap.last_price,
-                            "volume": snap.volume,
-                            "prev_close": snap.prev_close,
-                            "source": "stockbit",
-                            "source_ts": datetime.now(WIB),
-                            "report": "Stockbit Exodus Live Direct"
-                        }
                 except Exception as exc:
                     logger.error(f"Stockbit batch scan error for {ticker}: {exc}")
                 finally:
                     await provider.close()
+                if snap:
+                    results[ticker] = {
+                        "last": snap.last_price,
+                        "open": snap.open_price if snap.open_price else snap.last_price,
+                        "high": snap.high if snap.high else snap.last_price,
+                        "low": snap.low if snap.low else snap.last_price,
+                        "volume": snap.volume,
+                        "prev_close": snap.prev_close,
+                        "source": "stockbit",
+                        "source_ts": datetime.now(WIB),
+                        "report": "Stockbit Exodus Live Direct"
+                    }
+                else:
+                    itick_q = (itick_summary_dict or {}).get(ticker)
+                    if itick_q and itick_q.get("last"):
+                        results[ticker] = {
+                            "last": itick_q["last"],
+                            "open": itick_q.get("open") or itick_q["last"],
+                            "high": itick_q.get("high") or itick_q["last"],
+                            "low": itick_q.get("low") or itick_q["last"],
+                            "volume": itick_q.get("volume", 0.0),
+                            "prev_close": itick_q.get("prev_close", 0.0),
+                            "source": "itick",
+                            "source_ts": itick_q.get("source_ts") or datetime.now(WIB),
+                            "report": "itick.org Backup Quote"
+                        }
                 completed += 1
                 progress_bar.progress(completed / total)
                 await asyncio.sleep(delay)
@@ -872,6 +917,43 @@ with col_ref2:
         if live_results:
             st.session_state.screener_data.update(live_results)
             st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Stockbit API)"
+        st.rerun()
+
+with col_ref3:
+    itick_auth_ok = bool(config.ITICK_TOKEN)
+    itick_help_text = "Fresh quote dari itick.org (backup) — 1 batch call, max 50 tickers" if itick_auth_ok else "itick.org unavailable (Requires ITICK_TOKEN in .env)"
+    if st.button("🛰️ Refresh Live Feed (itick)", use_container_width=True, help=itick_help_text, disabled=not itick_auth_ok):
+        # Single batched quotes call (1 itick API call, max 50 codes); skipped
+        # silently when the token is missing/invalid or the 5-call/min budget is
+        # exhausted (fetch_itick_quotes_batch returns {} then).
+        async def fetch_itick_screener_batch(tickers):
+            itick_summary_dict = await asyncio.to_thread(
+                fetch_itick_quotes_batch, tickers[:50]
+            )
+            if not itick_summary_dict:
+                st.warning("itick.org mengembalikan kosong — cek ITICK_TOKEN (401), budget 5 call/menit, atau tidak ada data.")
+                return {}
+            results = {}
+            for ticker, q in itick_summary_dict.items():
+                if not q.get("last"):
+                    continue
+                results[ticker] = {
+                    "last": q["last"],
+                    "open": q.get("open") or q["last"],
+                    "high": q.get("high") or q["last"],
+                    "low": q.get("low") or q["last"],
+                    "volume": q.get("volume", 0.0),
+                    "prev_close": q.get("prev_close", 0.0),
+                    "source": "itick",
+                    "source_ts": q.get("source_ts") or datetime.now(WIB),
+                    "report": "itick.org Backup Quote"
+                }
+            return results
+
+        live_results = asyncio.run(fetch_itick_screener_batch(cand_list))
+        if live_results:
+            st.session_state.screener_data.update(live_results)
+            st.session_state.last_fetch = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (itick API)"
         st.rerun()
 
 with col_info:
@@ -988,12 +1070,16 @@ from data.signal_bundle import (
     build_pre_ara_rows,
     build_trending_rows,
 )
-from data.mega_score import compute_mega_score, HORIZON_WEIGHTS
+from data.mega_score import compute_mega_score, HORIZON_WEIGHTS, news_sentiment_to_score
 
 
 def _mega_fingerprint(screener_data, last_fetch, nonce) -> str:
-    """Stable signature of the fetched screener data (cheap, plain Python)."""
-    parts = [str(last_fetch), str(nonce)]
+    """Stable signature of the fetched screener data (cheap, plain Python).
+
+    Includes the News tab's computation nonce so fresh news sentiment (session
+    state) is picked up by the landing rebuild without a live-data refresh.
+    """
+    parts = [str(last_fetch), str(nonce), str(st.session_state.get("mega_news_nonce", ""))]
     for ticker in sorted(screener_data):
         d = screener_data[ticker]
         parts.append(f"{ticker}:{d.get('last')}:{d.get('source')}:{d.get('source_ts')}")
@@ -1001,14 +1087,18 @@ def _mega_fingerprint(screener_data, last_fetch, nonce) -> str:
 
 
 def _build_mega_rows(scored_list) -> dict:
-    """Per-horizon Mega Score ranking. News sentiment is intentionally NOT
-    fetched here — the News tab owns the (expensive) news pipeline, so loading
-    this landing view never pays the 6-source scrape + per-ticker yfinance cost.
-    `compute_mega_score` flags the missing news signal as defaulted (50)."""
+    """Per-horizon Mega Score ranking. News sentiment is lazy: the landing
+    never triggers the expensive 6-source + yfinance news pipeline — it only
+    reuses the rows the News tab already computed (session state). Tickers
+    without news rows stay defaulted at 50, so loading Pick of the Day stays
+    fast even before the News tab has ever been opened."""
     bsjp_data = build_bsjp_rows(scored_list)
     minervini_data = build_minervini_rows(scored_list)
     pre_ara_rows = build_pre_ara_rows(scored_list)
     trending_rows = build_trending_rows(scored_list)
+    # News tab owns the news pipeline (6-source scrape + per-ticker yfinance).
+    # The landing only reuses the last computed rows — absent = defaulted 50.
+    news_rows = st.session_state.get("mega_news_rows", []) or []
 
     lookup_bsjp = {r["Ticker"]: safe_float(r["Setup Score"]) for r in bsjp_data}
     lookup_min = {
@@ -1017,11 +1107,13 @@ def _build_mega_rows(scored_list) -> dict:
     }
     lookup_preara = {r["Ticker"]: safe_float(r["Pre-ARA Score"]) for r in pre_ara_rows}
     lookup_trend = {r["Ticker"]: safe_float(r["Trending Score"]) for r in trending_rows}
+    lookup_news = {r["Ticker"]: safe_float(r["_combined"]) for r in news_rows}
 
     has_bsjp = set(lookup_bsjp)
     has_min = {r["Ticker"] for r in minervini_data if "PASSED" in r["Passed Template"]}
     has_ara = set(lookup_preara)
     has_trend = set(lookup_trend)
+    has_news = set(lookup_news)
 
     mega_rows = {}
     for horizon in HORIZON_WEIGHTS:
@@ -1035,6 +1127,9 @@ def _build_mega_rows(scored_list) -> dict:
                 "minervini_score": safe_float(lookup_min.get(t, 50)),
                 "pre_ara_score": safe_float(lookup_preara.get(t, 50)),
                 "trending_score": safe_float(lookup_trend.get(t, 50)),
+                "news_sentiment_score": (
+                    news_sentiment_to_score(lookup_news.get(t, 0.0)) if t in lookup_news else None
+                ),
             }
             mega = compute_mega_score(signals, horizon)
             rows.append({
@@ -1057,6 +1152,7 @@ def _build_mega_rows(scored_list) -> dict:
                 "has_minervini": t in has_min,
                 "has_pre_ara": t in has_ara,
                 "has_trending": t in has_trend,
+                "has_news": t in has_news,
                 "hist_row_obj": s["hist_row_obj"],
                 "raw_data_obj": s["raw_data_obj"],
             })
