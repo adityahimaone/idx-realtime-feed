@@ -1,10 +1,14 @@
 """
 Pre-ARA Momentum — Early Buy Signal detection.
-IDX 2024 ARA rules:
-  < 200      → +35%
-  200–5.000  → +25%
-  ≥ 5.000    → +20%
-ARB: −7% semua tier (Papan Utama & Pengembangan).
+
+ARA / ARB 2025–2026 rules (BEI Kep-00003/BEI/04-2025, efektif 8 Apr 2025):
+  Rp 1  – Rp 10   : ARA +Rp1  nominal, ARB −Rp1 nominal
+  > Rp10 – < 200  : ARA +35%, ARB −15%
+  200    – 5.000  : ARA +25%, ARB −15%
+  ≥ 5.000         : ARA +20%, ARB −15%
+
+Starting 1 Jan 2027 ARB returns to symmetric with ARA (±35/25/20).
+As of Oct 2026 we use the 15% flat ARB rule above.
 """
 import math
 import time
@@ -58,10 +62,19 @@ def get_ara_limit(price: float) -> float:
 
 
 def get_arb_limit(price: float) -> float:
-    """ARB limit % — flat 7% across all tiers."""
+    """ARB limit % (2025–2026 rule, Kep-00003/BEI/04-2025).
+
+    For the Rp 1 – Rp 10 range the ARB is nominal −Rp1 (not a %).
+    We return the percentage equivalent, but callers must clamp the
+    absolute price for that range. For all other tiers: flat −15%.
+    """
     if price <= 0:
         return 0.0
-    return -7.0
+    # Rp 1 – Rp 10: nominal −Rp1, which is -100% at Rp1, but we use
+    # a sentinel here and let get_arb_price handle it specially.
+    if price <= 10:
+        return -100.0  # sentinel: caller checks price <= 10
+    return -15.0
 
 
 def get_ara_price(prev_close: float) -> float:
@@ -71,7 +84,13 @@ def get_ara_price(prev_close: float) -> float:
 
 
 def get_arb_price(prev_close: float) -> float:
-    """Calculate ARB price from prev_close."""
+    """Calculate ARB price from prev_close (2025–2026 rule).
+
+    Rp 1 – Rp 10: nominal −Rp1, so ARB price = max(Rp 1, prev_close − 1).
+    > Rp 10: flat −15%.
+    """
+    if prev_close <= 10:
+        return max(1.0, round_to_tick(prev_close - 1))
     limit_pct = get_arb_limit(prev_close)
     return round_to_tick(prev_close * (1 + limit_pct / 100.0))
 

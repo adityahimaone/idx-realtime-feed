@@ -125,12 +125,25 @@ def track_delta(prev_levels: list[OrderbookLevel], curr_levels: list[OrderbookLe
 # ═════════════════════════════════════════════════════════════════════════════
 
 def get_tick_size(price: float) -> int:
-    """IDX JATS Fraksi Harga (per bursa rules)."""
-    if price < 200:    return 1
-    elif price < 500:  return 2
+    """IDX JATS Fraksi Harga (per bursa rules).
+
+    Correct tiers (BEI fraksi harga, Papan Utama & Pengembangan):
+      < 200        -> Rp 1
+      200 – < 500  -> Rp 2
+      500 – < 2000 -> Rp 5
+      2000 – < 5000 -> Rp 10
+      >= 5000      -> Rp 25
+
+    NOTE (audit fix): this previously returned 25 for the 2000–5000 tier and
+    50 for >= 5000, which double-counted the tick and mis-aligned every
+    Engine A/B/C entry/SL/TP for mid/high-priced tickers. It now matches the
+    exchange table used by data/scoring.get_tick_size and data/pre_ara.
+    """
+    if price < 200:     return 1
+    elif price < 500:   return 2
     elif price < 2_000: return 5
-    elif price < 5_000: return 25
-    else:              return 50
+    elif price < 5_000: return 10
+    else:               return 25
 
 
 def round_to_tick(price: float, reference: float = None) -> int:

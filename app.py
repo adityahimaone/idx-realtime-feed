@@ -1069,8 +1069,16 @@ from data.signal_bundle import (
     build_minervini_rows,
     build_pre_ara_rows,
     build_trending_rows,
+    _fetch_ihsg_3mo_return,
 )
-from data.mega_score import compute_mega_score, HORIZON_WEIGHTS, news_sentiment_to_score
+from data.mega_score import (
+    compute_mega_score,
+    HORIZON_WEIGHTS,
+    news_sentiment_to_score,
+    minervini_to_score,
+    build_mega_signals,
+)
+from data.recommendation import compute_best_pick
 
 
 def _mega_fingerprint(screener_data, last_fetch, nonce) -> str:
@@ -1100,38 +1108,38 @@ def _build_mega_rows(scored_list) -> dict:
     # The landing only reuses the last computed rows — absent = defaulted 50.
     news_rows = st.session_state.get("mega_news_rows", []) or []
 
-    lookup_bsjp = {r["Ticker"]: safe_float(r["Setup Score"]) for r in bsjp_data}
-    lookup_min = {
-        r["Ticker"]: (100.0 if "PASSED" in r["Passed Template"] else safe_float(r["score_int"]) / 8 * 100)
-        for r in minervini_data
+    # Lookups contain ONLY tickers with a real sub-signal value, so an absent
+    # signal is passed as None (defaulted) instead of a silent 50 — the
+    # confidence badge then reflects genuine signal coverage (audit fix).
+    lookups = {
+        "bsjp": {r["Ticker"]: safe_float(r["Setup Score"]) for r in bsjp_data},
+        "minervini": {
+            r["Ticker"]: minervini_to_score("PASSED" in r["Passed Template"], r["score_int"])
+            for r in minervini_data
+        },
+        "pre_ara": {r["Ticker"]: safe_float(r["Pre-ARA Score"]) for r in pre_ara_rows},
+        "trending": {r["Ticker"]: safe_float(r["Trending Score"]) for r in trending_rows},
+        "news": {r["Ticker"]: safe_float(r["_combined"]) for r in news_rows},
     }
-    lookup_preara = {r["Ticker"]: safe_float(r["Pre-ARA Score"]) for r in pre_ara_rows}
-    lookup_trend = {r["Ticker"]: safe_float(r["Trending Score"]) for r in trending_rows}
-    lookup_news = {r["Ticker"]: safe_float(r["_combined"]) for r in news_rows}
 
-    has_bsjp = set(lookup_bsjp)
+    has_bsjp = set(lookups["bsjp"])
     has_min = {r["Ticker"] for r in minervini_data if "PASSED" in r["Passed Template"]}
-    has_ara = set(lookup_preara)
-    has_trend = set(lookup_trend)
-    has_news = set(lookup_news)
+    has_ara = set(lookups["pre_ara"])
+    has_trend = set(lookups["trending"])
+    has_news = set(lookups["news"])
+
+    # IHSG 3-month return (cached 24h) for relative-strength denominator
+    rs_ihsg = _fetch_ihsg_3mo_return()
 
     mega_rows = {}
     for horizon in HORIZON_WEIGHTS:
         rows = []
         for s in scored_list:
             t = s["Ticker"]
-            signals = {
-                "intraday_score": safe_float(s["Intraday Score"]),
-                "hist_score": safe_float(s["hist_row_obj"].get("Score v2", 50)),
-                "bsjp_score": safe_float(lookup_bsjp.get(t, 50)),
-                "minervini_score": safe_float(lookup_min.get(t, 50)),
-                "pre_ara_score": safe_float(lookup_preara.get(t, 50)),
-                "trending_score": safe_float(lookup_trend.get(t, 50)),
-                "news_sentiment_score": (
-                    news_sentiment_to_score(lookup_news.get(t, 0.0)) if t in lookup_news else None
-                ),
-            }
+            signals = build_mega_signals(s, lookups)
             mega = compute_mega_score(signals, horizon)
+            # Best-Pick conviction engine (researched IDX formulas)
+            best = compute_best_pick(s, horizon, rs_ihsg=rs_ihsg)
             rows.append({
                 "Ticker": t,
                 "Company": s["Company Name"],
@@ -1155,6 +1163,7 @@ def _build_mega_rows(scored_list) -> dict:
                 "has_news": t in has_news,
                 "hist_row_obj": s["hist_row_obj"],
                 "raw_data_obj": s["raw_data_obj"],
+                "BestPick": best,
             })
         rows.sort(key=lambda r: r["Mega Score"], reverse=True)
         mega_rows[horizon] = rows

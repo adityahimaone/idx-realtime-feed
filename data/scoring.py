@@ -331,13 +331,19 @@ def position_size_lots(entry: float, sl: float, base_portfolio: float,
     Lots_risk = (base * risk_budget) / ((entry - sl) * 100)
     Lots_cap  = (base * allocation_pct) / (entry * 100)
     Lots      = min(Lots_risk, Lots_cap)
+
+    Risk-first means the risk budget is a *hard ceiling*: when a single lot
+    already risks more than `base * risk_budget` (i.e. Lots_risk == 0), the
+    correct size is 0, not the allocation cap. The previous implementation
+    returned `lots_cap` in that branch, which silently exceeded the 1% risk
+    budget — a risk-control hole (audit fix).
     """
     if entry <= 0 or base_portfolio <= 0:
         return 0
     risk_per_share = entry - sl
     lots_risk = int((base_portfolio * risk_budget) / (risk_per_share * 100)) if risk_per_share > 0 else 0
     lots_cap = int((base_portfolio * allocation_pct) / (entry * 100)) if entry > 0 else 0
-    return min(lots_risk, lots_cap) if lots_risk > 0 else lots_cap
+    return min(lots_risk, lots_cap)
 
 
 def minify_html(html_str: str) -> str:
