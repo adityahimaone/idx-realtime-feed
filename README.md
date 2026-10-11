@@ -10,7 +10,11 @@ The primary frontend interface of the application. It visualizes live feeds, agg
 
 ### 🌟 UI Key Features
 1. **Brand Header + API Status Board**: New app header (gradient brand tile, title, market tag) sits above a live status board with per-source pulse dots — green connected, amber degraded/standby, red hard-down for Google Sheets / Exodus API — plus the **🔴 LIVE** / **⏸️ CLOSED** market badge and a live WIB clock.
-2. **🏆 Pick of the Day (landing page)**: The unified Mega Score + Tier verdict for the whole watchlist. Navigation is a lazy `st.pills` switcher — only the selected page renders and fetches, so opening a page is what triggers its network work. The Pick page builds the memoized Mega Score bundles on open (per fetch fingerprint, with a **🔄 Hitung Ulang** override). Horizon selector (Scalping / Swing-BSJP / Long Term) is persisted in session state. Each candidate expands to show 3-tier entries (`calculate_strategies`), SL/TP, position size at 1% portfolio risk, a one-line "why" (top-2 breakdown contributors), and a signal-availability confidence badge. Filters narrow to BSJP / Minervini-PASSED / Pre-ARA / Trending candidates; a card view is available for mobile.
+2. **🏆 Pick of the Day (landing page)**: The unified Mega Score + Tier verdict for the whole watchlist, now augmented with the **Best-Pick Conviction Engine** (Engine E). Navigation is a lazy `st.pills` switcher — only the selected page renders and fetches, so opening a page is what triggers its network work. The Pick page builds the memoized Mega Score bundles on open (per fetch fingerprint, with a **🔄 Hitung Ulang** override). Horizon selector (Scalping / Swing-BSJP / Long Term) is persisted in session state. Each candidate expands to show:
+   - 3-tier entries (`calculate_strategies`), SL/TP, position size at 1% portfolio risk
+   - One-line "why" (top-2 breakdown contributors) and a signal-availability confidence badge
+   - **Best-Pick detail panel**: researched IDX conviction score, ATR-based entry/SL/TP, per-factor breakdown, risk gates, and rationale
+   - Filters narrow to BSJP / Minervini-PASSED / Pre-ARA / Trending candidates; a card view is available for mobile.
 3. **📋 Watchlist + Portfolio**: Merges the live feed (active tickers + Stockbit overrides), the custom watchlist, and the portfolio tracker + DCA calculator into Watchlist / Holdings / DCA sections.
 4. **🔍 Deep Dive (Exodus API)**: Real-time bid/ask queue details, wall detection, delta tracking, **Grounded 3-Tier Execution Strategies**, ARA-aware warnings, and live P/L cross-links — plus the **🌊 Elliott Wave** analysis folded in below as an expander. **Engine D — Trade Book Momentum** pulls the public daily trade-book chart from `exodus.stockbit.com` (per-minute cumulative buy/sell lots & values, net flow, big-money series) and re-calibrates the Aggressive / Moderate / Low Risk tiers: big-money sell ≥55% disables Aggressive and widens stops (capped cumulative SL widening ≤25%), big-money accumulation tightens them, and sell-dominant books flag caution. The Deep Dive shows a **single verdict** — Engine D when the trade book is available, otherwise Engine A — while Engine B (sentiment) and Engine C (Fibonacci) render as confirmation badges. Trade-book VWAP feeds Engine B's average-price input, and the live score consumes the Exodus imbalance ratio plus a trade-flow slot when the profile is present.
 5. **📊 General Screener**: Health ranking of active stocks by Intraday Health Score, with scalping / swing / long-term sub-tables.
@@ -194,16 +198,77 @@ $$\text{New Average Buy Price} = \frac{(\text{Old Average} \times \text{Old Lots
 
 ---
 
-### 5. ARA/ARB Rules & Proximity
+### 5. ARA/ARB Rules & Proximity (Current BEI Rules)
+
+> **Updated Oct 2026** — reflects Kep-00003/BEI/04-2025 (8 Apr 2025) and Kep-00136/BEI/09-2026 (28 Sep 2026).
+
 - **Auto Rejection Atas (ARA) Limit**:
-  - Price $< 200 \rightarrow 35\%$
-  - Price $200 - 5000 \rightarrow 25\%$
-  - Price $\geq 5000 \rightarrow 20\%$
-- **Auto Rejection Bawah (ARB)**: Flat $-7\%$ across all price tiers.
+  - Price $< 200 \rightarrow +35\%$
+  - Price $200 - 5000 \rightarrow +25\%$
+  - Price $\geq 5000 \rightarrow +20\%$
+- **Auto Rejection Bawah (ARB)** — *asymmetric until 31 Dec 2026*:
+  - Rp $1$ – $10$: nominal $-Rp1$
+  - Price $> 10$: flat $-15\%$ across all tiers
+  - *(Starting 1 Jan 2027 ARB returns to symmetric with ARA: −35% / −25% / −20%)*
+- **Fraksi Harga (Tick Size)** — valid since 28 Sep 2026:
+  - Rp $1$ – $< 200$: Rp $1$
+  - Rp $200$ – $< 500$: Rp $2$
+  - Rp $500$ – $< 2{,}000$: Rp $5$
+  - Rp $2{,}000$ – $< 5{,}000$: Rp $10$
+  - $\geq$ Rp $5{,}000$: Rp $25$
 - **ARA Sanity Warning**:
   During ARA, orderbook bid levels below the ceiling are frequently depleted, causing algorithms to select unrealistically low prices for Moderate/Low Risk entries. The system calculates a threshold floor:
   $$\text{Floor Price} = \min(\text{Open Price}, \text{Current Price} \times (1 - 0.08))$$
   If an entry strategy suggests a level below this $\text{Floor Price}$, a warning is flagged explaining the orderbook gap due to the ARA state.
+
+---
+
+### 6. Best-Pick Conviction Engine (`data/recommendation.py`)
+
+A transparent, per-horizon scoring system built from researched IDX-specific formulas. Each factor is scored 0–100. Missing data defaults to neutral 50 with reduced confidence — never fabricated.
+
+#### Factor Formulas
+
+| Factor | Description | Key Inputs |
+|---|---|---|
+| **Liquidity** | Average daily traded value gate (thin = danger) | `Vol_Avg × Price`, `value` |
+| **Volatility** | ATR% sweet-spot per horizon | `ATR %`, `Daily_Range_Pct` |
+| **Relative Strength** | Ticker 3M return vs IHSG 3M return | `ClosePrev`, yfinance 3M |
+| **Trend Template** | Minervini Stage-2 condition count | MA20/50/200, 52W High/Low |
+| **Flow** | Foreign flow + orderbook + tradebook big-money | `foreign_buy/sell`, bid/ask lots |
+| **Momentum** | Intraday change% with RSI regime adjustment | `Change %`, `RSI14` |
+| **Fundamental** | PE + MarketCap + Beta composite (long-term only) | `PE`, `MarketCap`, `Beta` |
+
+#### Horizon Weights
+
+| Factor | Scalping | Swing/BSJP | Long-term |
+|---|---|---|---|
+| Liquidity | 0.15 | 0.15 | 0.10 |
+| Momentum | 0.25 | 0.15 | 0.10 |
+| Flow | 0.25 | 0.20 | — |
+| Volatility | 0.15 | 0.15 | 0.10 |
+| Trend | 0.10 | 0.20 | 0.30 |
+| RS vs IHSG | 0.10 | 0.15 | 0.15 |
+| Fundamental | — | — | 0.25 |
+
+#### Hard Risk Gates (most restrictive wins)
+
+- UMA flag → cap 40
+- Corporate Action → cap 60
+- Near-ARA (`ARA_Dist_Pct ≤ 2%`) → cap 55
+- Extreme volatility (`ATR% > 15`) → cap 50
+- Illiquidity (avg value < Rp 250 M) → cap 55
+- Big-money distributing + negative net flow → cap 60
+
+#### ATR-Based Entry / SL / TP
+
+| Tier | ATR k | Max Risk % | R/R Target |
+|---|---|---|---|
+| Aggressive | 1.0× ATR | 3% | 1.5x |
+| Moderate | 1.5× ATR | 4% | 2.0x |
+| Low Risk | 2.0× ATR | 6% | 2.5x |
+
+SL is floored at structural support (sheet `Support` or `MA20 × 0.97`). TP is capped at **52W High** and **ARA price**. All prices are tick-aligned with the correct IDX fraksi harga.
 
 ---
 

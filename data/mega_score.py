@@ -68,3 +68,51 @@ def news_sentiment_to_score(combined: float) -> float:
     (capped at 100), each -1.0 subtracts 20 (floored at 0).
     """
     return round(min(max(50 + float(combined) * 20, 0), 100), 1)
+
+
+def minervini_to_score(passed: bool, score_int: float) -> float:
+    """Map the Minervini trend-template (0-10 conditions) to a 0-100 input.
+
+    Passing the template (>=8/10) is treated as a full 100 (binary "Stage 2
+    confirmed"). Failing stocks map *linearly* from their condition count so a
+    7/10 no longer scores 87.5 (the old `score_int / 8 * 100` inflated every
+    sub-8 result above its true quality — audit fix).
+    """
+    if passed:
+        return 100.0
+    return round(max(0.0, min(float(score_int), 10.0)) / 10.0 * 100.0, 1)
+
+
+def build_mega_signals(entry: dict, lookups: dict) -> dict:
+    """Assemble the per-horizon signal dict for one ticker.
+
+    Signals that are genuinely absent for a ticker are passed as ``None``
+    (never a silent 50 placeholder) so ``compute_mega_score`` reports them in
+    ``defaulted`` and the confidence badge stays honest. ``compute_mega_score``
+    still substitutes 50 for ``None`` internally, so the *score* is unchanged —
+    only the availability/confidence reporting is corrected (audit fix).
+
+    `entry` keys: Ticker, Intraday Score, hist_row_obj.
+    `lookups` keys -> dict {ticker: value} that contain ONLY tickers with a
+    real value: "bsjp", "minervini", "pre_ara", "trending", "news".
+    """
+    t = entry.get("Ticker")
+    hist_row = entry.get("hist_row_obj") or {}
+
+    def _look(key):
+        return (lookups.get(key) or {}).get(t)
+
+    hist_raw = hist_row.get("Score v2")
+    hist_score = None if hist_raw in (None, "") else hist_raw
+
+    intraday = entry.get("Intraday Score")
+    news = _look("news")
+    return {
+        "intraday_score": intraday if intraday not in (None, "") else None,
+        "hist_score": hist_score,
+        "bsjp_score": _look("bsjp"),
+        "minervini_score": _look("minervini"),
+        "pre_ara_score": _look("pre_ara"),
+        "trending_score": _look("trending"),
+        "news_sentiment_score": news_sentiment_to_score(news) if news is not None else None,
+    }

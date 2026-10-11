@@ -66,21 +66,40 @@ def align_price_to_tick(price: float, round_direction: str = "nearest") -> float
 
 
 def calculate_ara_arb_fallbacks(prev_close: float) -> tuple[float, float]:
-    """Calculate fallback ARA/ARB prices based on IDX rules."""
+    """Calculate fallback ARA/ARB prices based on IDX rules.
+
+    ARA tiers (unchanged):
+      < 200      → +35%
+      200–5.000  → +25%
+      ≥ 5.000    → +20%
+
+    ARB (current rule, Kep-00003/BEI/04-2025, effective 8 Apr 2025):
+      Rp 1–10    → nominal −Rp1
+      > Rp 10    → flat −15%
+
+    NOTE: Starting 1 Jan 2027 ARB returns to symmetric with ARA.
+    """
     if prev_close <= 0:
         return 0.0, 0.0
-    if prev_close <= 200:
-        limit = 0.35
-    elif prev_close <= 5000:
-        limit = 0.25
+
+    # ARA limit
+    if prev_close < 200:
+        ara_limit = 0.35
+    elif prev_close < 5000:
+        ara_limit = 0.25
     else:
-        limit = 0.20
-    
-    raw_ara = prev_close * (1 + limit)
-    raw_arb = prev_close * (1 - limit)
-    
+        ara_limit = 0.20
+
+    raw_ara = prev_close * (1 + ara_limit)
     ara = align_price_to_tick(raw_ara, "down")
-    arb = align_price_to_tick(raw_arb, "up")
+
+    # ARB limit
+    if prev_close <= 10:
+        arb = max(1.0, align_price_to_tick(prev_close - 1, "up"))
+    else:
+        raw_arb = prev_close * (1 - 0.15)
+        arb = align_price_to_tick(raw_arb, "up")
+
     return ara, arb
 
 

@@ -222,6 +222,48 @@ def _strategy_detail(r: dict, total_portfolio_value: float):
         )
 
 
+def _bestpick_detail(r: dict, total_portfolio_value: float):
+    """Render the researched Best-Pick conviction verdict (Engine E)."""
+    bp = r.get("BestPick")
+    if not bp:
+        return
+    st.markdown("---")
+    st.markdown(
+        f"**🎯 Best Pick — {bp['tier']}** `Score {bp['score']:.1f}` "
+        f"· Confidence `{bp['confidence']*100:.0f}%`"
+    )
+    if bp.get("warnings"):
+        for w in bp["warnings"]:
+            st.caption(f"⚠️ {w}")
+
+    # Breakdown mini-table
+    bd = bp.get("breakdown", {})
+    if bd:
+        parts = [f"{k.replace('_', ' ').title()} {v:.0f}" for k, v in bd.items()]
+        st.caption("Factor breakdown: " + " · ".join(parts))
+
+    # Levels per tier
+    levels = bp.get("levels", {})
+    if levels:
+        for tname in ("Aggressive", "Moderat", "Low Risk"):
+            lv = levels.get(tname)
+            if not lv:
+                continue
+            lots = bp.get("sizing", {}).get(tname, 0)
+            rr = lv.get("rr", 0)
+            risk_pct = lv.get("risk_pct", 0)
+            st.markdown(
+                f"- **{tname}**: entry `IDR {lv['entry']:,.0f}` · TP `IDR {lv['tp']:,.0f}` · "
+                f"SL `IDR {lv['sl']:,.0f}` · R/R `{rr}x` · risk `{risk_pct:.1f}%` · "
+                f"≈ **{lots} lot**"
+            )
+
+    # Rationale
+    rationale = bp.get("rationale", [])
+    if rationale:
+        st.caption("Why: " + " · ".join(rationale[:5]))
+
+
 def _render_pre_market_watch():
     """🔭 Pre-Market Watch — today's heuristic predictions from SQLite.
 
@@ -386,6 +428,7 @@ def render_tab_pick_of_the_day(total_portfolio_value=0.0):
                 st.caption(f"⚠️ Signal defaulted to 50: {', '.join(r['defaulted'])}")
 
             _strategy_detail(r, total_portfolio_value)
+            _bestpick_detail(r, total_portfolio_value)
 
     # ── Track Record (logged signals → yfinance forward returns) ──────────
     with st.expander("📈 Track Record — logged STRONG BUY/BUY signals", expanded=False):
